@@ -1,78 +1,93 @@
 using UnityEngine;
-using UnityEngine.InputSystem;
 
-public class PickupSystem : MonoBehaviour
+public class ObjectPickup : MonoBehaviour
 {
-    [Header("Pickup Settings")]
-    public float pickupRange = 2f;
-    public Transform holdPosition;
+    public float pickupRange = 3f;
+    public Transform holdPoint;
+    public float throwForce = 500f;
 
-    private GameObject heldObject = null;
-    private Rigidbody heldRigidbody = null;
+    private GameObject heldObject;
+    private Rigidbody heldRb;
 
-    private PlayerInput playerInput;
-    private InputAction interactAction;
-
-    private void Awake()
+    void Update()
     {
-        playerInput = GetComponent<PlayerInput>();
-        interactAction = playerInput.actions["Interact"]; // Make sure you have an "Interact" action
-        interactAction.performed += context => HandleInteract();
-    }
-
-    private void OnDestroy()
-    {
-        interactAction.performed -= context => HandleInteract();
-    }
-
-    private void HandleInteract()
-    {
-        if (heldObject == null)
+        // Input for pickup ("E" or Controller Button X)
+        if (Input.GetKeyDown(KeyCode.E)/* || Input.GetButtonDown("Pickup")*/)
         {
-            TryPickupObject();
-        }
-        else
-        {
-            DropHeldObject();
-        }
-    }
-
-    private void TryPickupObject()
-    {
-        Ray ray = new Ray(transform.position, transform.forward);
-        if (Physics.Raycast(ray, out RaycastHit hit, pickupRange))
-        {
-            GameObject target = hit.collider.gameObject;
-
-            if (target.CompareTag("Pickupable"))
+            if (heldObject == null)
             {
-                Rigidbody targetRb = target.GetComponent<Rigidbody>();
-                if (targetRb != null)
+                TryPickup();
+            }
+        }
+
+        // Input for throw ("G" or Controller Button B)
+        if (Input.GetKeyDown(KeyCode.G)/* || Input.GetButtonDown("drop")*/)
+        {
+            if (heldObject != null)
+            {
+                ThrowObject();
+            }
+        }
+
+        // Keep object at hold point if holding
+        if (heldObject != null)
+        {
+            heldObject.transform.position = holdPoint.position;
+        }
+    }
+
+    void TryPickup()
+    {
+        Camera cam = Camera.main;
+        Ray ray = cam.ScreenPointToRay(new Vector3(Screen.width / 2, Screen.height / 2));
+        RaycastHit hit;
+
+        if (Physics.Raycast(ray, out hit, pickupRange))
+        {
+            if (hit.collider.CompareTag("Pickupable"))
+            {
+                heldObject = hit.collider.gameObject;
+                heldRb = heldObject.GetComponent<Rigidbody>();
+
+                if (heldRb != null)
                 {
-                    heldObject = target;
-                    heldRigidbody = targetRb;
-
-                    heldRigidbody.isKinematic = true;
-                    heldRigidbody.useGravity = false;
-
-                    heldObject.transform.position = holdPosition.position;
-                    heldObject.transform.rotation = holdPosition.rotation;
-                    heldObject.transform.SetParent(holdPosition);
+                    heldRb.useGravity = false;
+                    heldRb.isKinematic = true;
                 }
+
+                heldObject.transform.position = holdPoint.position;
+                heldObject.transform.SetParent(holdPoint);
             }
         }
     }
 
-    private void DropHeldObject()
-    {
-        if (heldObject != null)
-        {
-            heldObject.transform.SetParent(null);
-            heldRigidbody.isKinematic = false;
-            heldRigidbody.useGravity = true;
 
-            heldObject = null;
-            heldRigidbody = null;
+    void ThrowObject()
+    {
+        heldObject.transform.SetParent(null);
+        if (heldRb != null)
+        {
+            heldRb.isKinematic = false;
+            heldRb.useGravity = true;
+
+            Camera cam = Camera.main;
+            if (cam != null)
+            {
+                // Add a slight upward component to the throw direction
+                Vector3 throwDirection = cam.transform.forward + cam.transform.up * 0.2f;
+                heldRb.AddForce(throwDirection.normalized * throwForce);
+            }
+            else
+            {
+                // Fallback if no camera
+                Vector3 throwDirection = transform.forward + transform.up * 0.2f;
+                heldRb.AddForce(throwDirection.normalized * throwForce);
+            }
         }
+
+        heldObject = null;
+        heldRb = null;
     }
+
+
 }
