@@ -1,6 +1,6 @@
 using UnityEngine;
 
-public class ObjectPickup : MonoBehaviour
+public class PickupSystem : MonoBehaviour
 {
     public float pickupRange = 3f;
     public Transform holdPoint;
@@ -8,17 +8,18 @@ public class ObjectPickup : MonoBehaviour
 
     private GameObject heldObject;
     private Rigidbody heldRb;
+    private Collider heldCollider;
 
     void Update()
     {
-        // Input for pickup ("E" or Controller Button X)
-        if (Input.GetKeyDown(KeyCode.E)/* || Input.GetButtonDown("Pickup")*/)
-        {
-            if (heldObject == null)
-            {
-                TryPickup();
-            }
-        }
+        //// Input for pickup ("E" or Controller Button X)
+        //if (Input.GetKeyDown(KeyCode.E)/* || Input.GetButtonDown("Pickup")*/)
+        //{
+        //    if (heldObject == null)
+        //    {
+        //        TryPickup();
+        //    }
+        //}
 
         // Input for throw ("G" or Controller Button B)
         if (Input.GetKeyDown(KeyCode.G)/* || Input.GetButtonDown("drop")*/)
@@ -36,7 +37,7 @@ public class ObjectPickup : MonoBehaviour
         }
     }
 
-    void TryPickup()
+    public void TryPickup()
     {
         Camera cam = Camera.main;
         Ray ray = cam.ScreenPointToRay(new Vector3(Screen.width / 2, Screen.height / 2));
@@ -53,6 +54,13 @@ public class ObjectPickup : MonoBehaviour
                 {
                     heldRb.useGravity = false;
                     heldRb.isKinematic = true;
+                    heldCollider = heldObject.GetComponent<Collider>();
+
+                    // Disable Collideer
+                    if (heldCollider != null)
+                    {
+                        heldCollider.enabled = false; // Disable collider while holding
+                    }                   
                 }
 
                 heldObject.transform.position = holdPoint.position;
@@ -76,6 +84,13 @@ public class ObjectPickup : MonoBehaviour
                 // Add a slight upward component to the throw direction
                 Vector3 throwDirection = cam.transform.forward + cam.transform.up * 0.2f;
                 heldRb.AddForce(throwDirection.normalized * throwForce);
+
+                // Turning on Collider
+                heldCollider = heldObject.GetComponent<Collider>();
+                if (heldCollider != null)
+                {
+                    heldCollider.enabled = true; // Disable collider while holding
+                }
             }
             else
             {

@@ -13,23 +13,28 @@ public class EnemyMelee : MonoBehaviour
 
     [Header("Player Detection")]
     public Transform player;
-    public float detectionRange = 15f;
     public LayerMask playerLayer;
+    public float fieldOfView = 120f;
+    public float detectionRange = 15f;
     public float attackRange = 2f;
-    public float fieldOfView = 120f; // Sudut pandang AI
 
-    [Header("Attack")]
+    [Header("Attack Settings")]
     public float meleeDamage = 20f;
-    public float attackCooldown = 1.5f;
+    public float attackCooldown = 2f;
     private float lastAttackTime;
 
-    // Debug Info
+    [Header("State Flags")]
+    private bool isAttacking = false;
+    private bool playerInSight = false;
     private Vector3 rayDirection;
     private bool isRaycasting;
+
+    private Animator animator;
 
     void Start()
     {
         agent = GetComponent<NavMeshAgent>();
+        animator = GetComponent<Animator>();
 
         if (waypoints.Length > 0)
         {
@@ -39,7 +44,7 @@ public class EnemyMelee : MonoBehaviour
 
     void Update()
     {
-        isRaycasting = false; // Reset debug
+        isRaycasting = false;
 
         if (player == null)
         {
@@ -51,76 +56,91 @@ public class EnemyMelee : MonoBehaviour
         float distanceToPlayer = Vector3.Distance(transform.position, player.position);
         float angleToPlayer = Vector3.Angle(transform.forward, directionToPlayer);
 
-        bool playerInFOV = angleToPlayer <= fieldOfView / 2 && distanceToPlayer <= detectionRange;
+        // Ray origin & target adaptif (untuk crouch)
+        Vector3 rayOrigin = transform.position + Vector3.up * 0.5f;
+        Vector3 rayTarget = player.position + Vector3.up * 0.5f;
+        rayDirection = (rayTarget - rayOrigin).normalized;
+        isRaycasting = true;
 
-        bool canSeePlayer = false;
-        if (playerInFOV)
+        playerInSight = false;
+        if (distanceToPlayer <= detectionRange && angleToPlayer <= fieldOfView / 2)
         {
-            rayDirection = directionToPlayer;
-            isRaycasting = true;
-
-            if (Physics.Raycast(transform.position + Vector3.up, directionToPlayer, out RaycastHit hit, detectionRange, playerLayer))
+            if (Physics.Raycast(rayOrigin, rayDirection, out RaycastHit hit, detectionRange, playerLayer))
             {
                 if (hit.transform.CompareTag("Player"))
                 {
-                    canSeePlayer = true;
+                    playerInSight = true;
                 }
             }
         }
 
-        if (canSeePlayer)
+        if (playerInSight)
         {
-            // Kejar player
-            agent.SetDestination(player.position);
-
-            // Jika sudah dalam jarak attackRange, serang
-            if (distanceToPlayer <= attackRange)
-            {
-                AttackPlayer();
-            }
+            HandleChaseOrAttack(distanceToPlayer);
         }
         else
         {
-            // Player hilang -> kembali ke waypoint
             Wander();
+        }
+    }
+
+    void HandleChaseOrAttack(float distance)
+    {
+        // Smooth look at
+        Vector3 lookPos = player.position - transform.position;
+        lookPos.y = 0;
+        Quaternion rot = Quaternion.LookRotation(lookPos);
+        transform.rotation = Quaternion.Slerp(transform.rotation, rot, Time.deltaTime * 5f);
+
+        if (distance > attackRange)
+        {
+            agent.isStopped = false;
+            agent.SetDestination(player.position);
+            isAttacking = false;
+            animator.SetBool("isWalking", true);
+        }
+        else
+        {
+            agent.isStopped = true;
+            animator.SetBool("isWalking", false);
+
+            if (Time.time - lastAttackTime >= attackCooldown)
+            {
+                lastAttackTime = Time.time;
+                isAttacking = true;
+                animator.SetTrigger("attack");
+            }
         }
     }
 
     void Wander()
     {
+        if (waypoints.Length == 0) return;
+
         if (!agent.pathPending && agent.remainingDistance < 0.5f)
         {
             currentWaypointIndex = (currentWaypointIndex + 1) % waypoints.Length;
             agent.SetDestination(waypoints[currentWaypointIndex].position);
         }
+
+        animator?.SetBool("isWalking", true);
     }
 
-    void AttackPlayer()
+    // Animation Event
+    public void DealMeleeDamage()
     {
-        // Menghadap ke player
-        transform.LookAt(new Vector3(player.position.x, transform.position.y, player.position.z));
+        if (!isAttacking) return;
 
-        if (Time.time - lastAttackTime > attackCooldown)
-        {
-            lastAttackTime = Time.time;
-            DealMeleeDamage();
-        }
-    }
-
-    void DealMeleeDamage()
-    {
-        // Cek apakah player dalam radius attackRange & punya PlayerStats
-        Collider[] hits = Physics.OverlapSphere(transform.position, attackRange, playerLayer);
-
+        Collider[] hits = Physics.OverlapSphere(transform.position, attackRange + 0.5f, playerLayer);
         foreach (var hit in hits)
         {
             if (hit.CompareTag("Player"))
             {
-                PlayerStats playerStats = hit.GetComponent<PlayerStats>();
-                if (playerStats != null)
+                var stats = hit.GetComponent<PlayerStats>();
+                if (stats != null)
                 {
-                    playerStats.Damage(meleeDamage, false);
-                    Debug.Log("Enemy melee attacked Player!");
+                    stats.Damage(meleeDamage, false);
+                    Debug.Log("Enemy hit the player!");
                 }
             }
         }
@@ -128,19 +148,12 @@ public class EnemyMelee : MonoBehaviour
 
     void OnDrawGizmos()
     {
-        // Gambar raycast hijau
         if (isRaycasting)
         {
             Gizmos.color = Color.green;
-            Vector3 start = transform.position + Vector3.up;
-            Gizmos.DrawRay(start, rayDirection * detectionRange);
+            Gizmos.DrawRay(transform.position + Vector3.up * 0.5f, rayDirection * detectionRange);
         }
 
-        // Gambar FOV (biru)
-        Gizmos.color = Color.blue;
-        Gizmos.DrawRay(transform.position + Vector3.up, transform.forward * detectionRange);
-
-        // Gambar attack range (merah)
         Gizmos.color = Color.red;
         Gizmos.DrawWireSphere(transform.position, attackRange);
     }
