@@ -6,14 +6,17 @@ public class PickupSystem : MonoBehaviour
     public Transform holdPoint;
     public float throwForce = 500f;
 
+    [Header("Weapon Check")]
+    public Transform weaponHolster; // drag weapon holster di inspector
+
     private GameObject heldObject;
     private Rigidbody heldRb;
     private Collider heldCollider;
 
     void Update()
     {
-        //// Input for pickup ("E" or Controller Button X)
-        //if (Input.GetKeyDown(KeyCode.E)/* || Input.GetButtonDown("Pickup")*/)
+        // Example Input Pickup Key
+        //if (Input.GetKeyDown(KeyCode.E))
         //{
         //    if (heldObject == null)
         //    {
@@ -21,8 +24,7 @@ public class PickupSystem : MonoBehaviour
         //    }
         //}
 
-        // Input for throw ("G" or Controller Button B)
-        if (Input.GetKeyDown(KeyCode.G)/* || Input.GetButtonDown("drop")*/)
+        if (Input.GetKeyDown(KeyCode.G))
         {
             if (heldObject != null)
             {
@@ -30,7 +32,6 @@ public class PickupSystem : MonoBehaviour
             }
         }
 
-        // Keep object at hold point if holding
         if (heldObject != null)
         {
             heldObject.transform.position = holdPoint.position;
@@ -39,6 +40,27 @@ public class PickupSystem : MonoBehaviour
 
     public void TryPickup()
     {
+        // Check if player is holding a weapon
+        if (weaponHolster != null && weaponHolster.childCount > 0)
+        {
+            bool hasActiveWeapon = false;
+
+            foreach (Transform child in weaponHolster)
+            {
+                if (child.gameObject.activeInHierarchy)
+                {
+                    hasActiveWeapon = true;
+                    break;
+                }
+            }
+
+            if (hasActiveWeapon)
+            {
+                Debug.Log("Cannot pick up object while holding a weapon.");
+                return; // Prevent pickup if a weapon is currently held
+            }
+        }
+
         Camera cam = Camera.main;
         Ray ray = cam.ScreenPointToRay(new Vector3(Screen.width / 2, Screen.height / 2));
         RaycastHit hit;
@@ -56,11 +78,8 @@ public class PickupSystem : MonoBehaviour
                     heldRb.isKinematic = true;
                     heldCollider = heldObject.GetComponent<Collider>();
 
-                    // Disable Collideer
                     if (heldCollider != null)
-                    {
-                        heldCollider.enabled = false; // Disable collider while holding
-                    }                   
+                        heldCollider.enabled = false;
                 }
 
                 heldObject.transform.position = holdPoint.position;
@@ -69,40 +88,24 @@ public class PickupSystem : MonoBehaviour
         }
     }
 
-
     void ThrowObject()
     {
         heldObject.transform.SetParent(null);
+
         if (heldRb != null)
         {
             heldRb.isKinematic = false;
             heldRb.useGravity = true;
 
             Camera cam = Camera.main;
-            if (cam != null)
-            {
-                // Add a slight upward component to the throw direction
-                Vector3 throwDirection = cam.transform.forward + cam.transform.up * 0.2f;
-                heldRb.AddForce(throwDirection.normalized * throwForce);
+            Vector3 throwDirection = (cam != null ? cam.transform.forward : transform.forward) + Vector3.up * 0.2f;
+            heldRb.AddForce(throwDirection.normalized * throwForce);
 
-                // Turning on Collider
-                heldCollider = heldObject.GetComponent<Collider>();
-                if (heldCollider != null)
-                {
-                    heldCollider.enabled = true; // Disable collider while holding
-                }
-            }
-            else
-            {
-                // Fallback if no camera
-                Vector3 throwDirection = transform.forward + transform.up * 0.2f;
-                heldRb.AddForce(throwDirection.normalized * throwForce);
-            }
+            if (heldCollider != null)
+                heldCollider.enabled = true;
         }
 
         heldObject = null;
         heldRb = null;
     }
-
-
 }

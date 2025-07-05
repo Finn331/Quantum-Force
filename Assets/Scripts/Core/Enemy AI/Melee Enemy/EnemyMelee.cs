@@ -10,10 +10,13 @@ public class EnemyMelee : MonoBehaviour
 
     [Header("Navigation")]
     private NavMeshAgent agent;
+    public float walkSpeed = 2f;
+    public float chaseSpeed = 4f;
 
     [Header("Player Detection")]
     public Transform player;
     public LayerMask playerLayer;
+    public LayerMask obstacleLayerMask;
     public float fieldOfView = 120f;
     public float detectionRange = 15f;
     public float attackRange = 2f;
@@ -29,17 +32,28 @@ public class EnemyMelee : MonoBehaviour
     private Vector3 rayDirection;
     private bool isRaycasting;
 
+    [Header("Combat Awareness")]
+    public bool wasProvoked = false;
+
+    [Header("Footstep Sounds")]
+    public AudioClip[] walkFootsteps;
+    public AudioClip[] runFootsteps;
+    public float footstepVolume = 1f;
+
+    [Header("SFX Settings")]
+    public AudioClip hurtSFX;
+    [SerializeField] AudioClip deathSFX;
+
     private Animator animator;
 
     void Start()
     {
         agent = GetComponent<NavMeshAgent>();
         animator = GetComponent<Animator>();
+        agent.speed = walkSpeed;
 
         if (waypoints.Length > 0)
-        {
             agent.SetDestination(waypoints[currentWaypointIndex].position);
-        }
     }
 
     void Update()
@@ -56,25 +70,39 @@ public class EnemyMelee : MonoBehaviour
         float distanceToPlayer = Vector3.Distance(transform.position, player.position);
         float angleToPlayer = Vector3.Angle(transform.forward, directionToPlayer);
 
-        // Ray origin & target adaptif (untuk crouch)
         Vector3 rayOrigin = transform.position + Vector3.up * 0.5f;
         Vector3 rayTarget = player.position + Vector3.up * 0.5f;
         rayDirection = (rayTarget - rayOrigin).normalized;
         isRaycasting = true;
 
         playerInSight = false;
+
         if (distanceToPlayer <= detectionRange && angleToPlayer <= fieldOfView / 2)
         {
-            if (Physics.Raycast(rayOrigin, rayDirection, out RaycastHit hit, detectionRange, playerLayer))
+            RaycastHit[] hits = Physics.RaycastAll(rayOrigin, rayDirection, detectionRange);
+            float closestDist = Mathf.Infinity;
+            Transform closest = null;
+
+            foreach (RaycastHit hit in hits)
             {
-                if (hit.transform.CompareTag("Player"))
+                if (((1 << hit.collider.gameObject.layer) & obstacleLayerMask) != 0)
+                    break; // Terhalang oleh dinding atau obstacle
+
+                float d = hit.distance;
+                if (d < closestDist)
                 {
-                    playerInSight = true;
+                    closestDist = d;
+                    closest = hit.transform;
                 }
+            }
+
+            if (closest != null && closest.CompareTag("Player"))
+            {
+                playerInSight = true;
             }
         }
 
-        if (playerInSight)
+        if (playerInSight || wasProvoked)
         {
             HandleChaseOrAttack(distanceToPlayer);
         }
@@ -86,7 +114,6 @@ public class EnemyMelee : MonoBehaviour
 
     void HandleChaseOrAttack(float distance)
     {
-        // Smooth look at
         Vector3 lookPos = player.position - transform.position;
         lookPos.y = 0;
         Quaternion rot = Quaternion.LookRotation(lookPos);
@@ -95,13 +122,19 @@ public class EnemyMelee : MonoBehaviour
         if (distance > attackRange)
         {
             agent.isStopped = false;
+            agent.speed = chaseSpeed;
             agent.SetDestination(player.position);
+
             isAttacking = false;
-            animator.SetBool("isWalking", true);
+            animator.SetBool("isRunning", true);
+            animator.SetBool("isWalking", false);
         }
         else
         {
             agent.isStopped = true;
+            agent.speed = 0;
+
+            animator.SetBool("isRunning", false);
             animator.SetBool("isWalking", false);
 
             if (Time.time - lastAttackTime >= attackCooldown)
@@ -117,16 +150,18 @@ public class EnemyMelee : MonoBehaviour
     {
         if (waypoints.Length == 0) return;
 
+        agent.speed = walkSpeed;
+
         if (!agent.pathPending && agent.remainingDistance < 0.5f)
         {
             currentWaypointIndex = (currentWaypointIndex + 1) % waypoints.Length;
             agent.SetDestination(waypoints[currentWaypointIndex].position);
         }
 
-        animator?.SetBool("isWalking", true);
+        animator.SetBool("isWalking", true);
+        animator.SetBool("isRunning", false);
     }
 
-    // Animation Event
     public void DealMeleeDamage()
     {
         if (!isAttacking) return;
@@ -145,6 +180,24 @@ public class EnemyMelee : MonoBehaviour
             }
         }
     }
+
+    public void OnTakeDamage()
+    {
+        wasProvoked = true;
+        SoundManager.Instance.PlaySound(hurtSFX, 0f, 0f, true, 1f);
+    }
+
+    public void PlayFootstepSound()
+    {
+        AudioClip[] selectedClips = animator.GetBool("isRunning") ? runFootsteps : walkFootsteps;
+        if (selectedClips.Length == 0) return;
+
+        int index = Random.Range(0, selectedClips.Length);
+        AudioClip clip = selectedClips[index];
+
+        SoundManager.Instance.PlaySound(clip, 0f, 0f, true, 0f, footstepVolume);
+    }
+
 
     void OnDrawGizmos()
     {
