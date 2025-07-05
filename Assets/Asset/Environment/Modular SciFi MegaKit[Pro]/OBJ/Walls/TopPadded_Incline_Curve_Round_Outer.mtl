@@ -1,0 +1,22 @@
+# Blender 4.0.2 MTL File: 'AllModules_Unreal.blend'
+# www.blender.org
+
+newmtl MI_PaddedWall
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.450000
+d 1.000000
+illum 1
+map_Kd C:/Users/Usuario/Desktop/Work/Blender/_FreeModels/_Unfinished/Modular SciFi MegaKit/Blends/T_PaddedWall_BaseColor.png
+
+newmtl MI_Trim_02
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.450000
+d 1.000000
+illum 2
+map_Kd C:/Users/Usuario/Desktop/Work/Blender/_FreeModels/_Unfinished/Modular SciFi MegaKit/Blends/T_Trim_02_BaseColor_Red.png

@@ -1,0 +1,16 @@
+# Blender v3.6.0 OBJ File: 'AllModules_Unreal.blend'
+# www.blender.org
+mtllib Decal_Caution.mtl
+o Decal_Caution_Plane.035
+v -1.328192 0.000000 0.515216
+v 1.328193 0.000000 0.515216
+v -1.328192 0.000000 -0.515217
+v 1.328193 0.000000 -0.515215
+vt 0.504438 0.500707
+vt 0.504437 0.691434
+vt 0.012756 0.691434
+vt 0.012756 0.500707
+vn 0.0000 1.0000 0.0000
+usemtl M_Decal_White
+s off
+f 2/1/1 4/2/1 3/3/1 1/4/1

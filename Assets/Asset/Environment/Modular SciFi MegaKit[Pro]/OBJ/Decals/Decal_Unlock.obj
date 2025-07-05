@@ -1,0 +1,16 @@
+# Blender v3.6.0 OBJ File: 'AllModules_Unreal.blend'
+# www.blender.org
+mtllib Decal_Unlock.mtl
+o Decal_Unlock_Plane.024
+v -0.473758 0.000000 -0.164689
+v 0.452263 0.000000 -0.164689
+v -0.574096 0.000000 0.164687
+v 0.595591 0.000000 0.164690
+vt 0.952000 0.110308
+vt 0.780599 0.110308
+vt 0.762027 0.049343
+vt 0.978529 0.049342
+vn 0.0000 1.0000 0.0000
+usemtl M_Decal_White
+s off
+f 2/1/1 1/2/1 3/3/1 4/4/1

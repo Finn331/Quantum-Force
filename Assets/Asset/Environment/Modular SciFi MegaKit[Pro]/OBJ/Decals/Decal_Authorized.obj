@@ -1,0 +1,16 @@
+# Blender v3.6.0 OBJ File: 'AllModules_Unreal.blend'
+# www.blender.org
+mtllib Decal_Authorized.mtl
+o Decal_Authorized_Plane.038
+v 1.289002 0.000000 -0.211878
+v -1.289005 0.000000 -0.211878
+v 1.289007 0.000000 0.211879
+v -1.289005 0.000000 0.211878
+vt 0.504438 0.422272
+vt 0.504438 0.500707
+vt 0.027264 0.500707
+vt 0.027264 0.422273
+vn 0.0000 1.0000 0.0000
+usemtl M_Decal_White
+s off
+f 3/1/1 1/2/1 2/3/1 4/4/1
