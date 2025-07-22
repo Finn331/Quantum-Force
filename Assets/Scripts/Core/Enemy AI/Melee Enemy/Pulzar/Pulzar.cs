@@ -1,6 +1,7 @@
 ﻿using UnityEngine;
 using UnityEngine.AI;
 using cowsins;
+using System.Collections;
 
 public class Pulzar : MonoBehaviour
 {
@@ -31,16 +32,17 @@ public class Pulzar : MonoBehaviour
     private bool playerInSight = false;
     private Vector3 rayDirection;
     private bool isRaycasting;
-    public bool wasProvoked = false;
-
-    [Header("Footstep Sounds")]
-    public AudioClip[] walkFootsteps;
-    public AudioClip[] runFootsteps;
-    public float footstepVolume = 1f;
+    private bool wasProvoked = false;
+    private bool ragePlayed = false;
+    private bool rageCoroutineRunning = false;
+    private bool isRaging = false;
 
     [Header("SFX")]
+    public AudioClip[] attackSFX;
+    [SerializeField] AudioClip rageSFX;
     public AudioClip hurtSFX;
     public AudioClip deathSFX;
+    public float sfxVolume = 1f;
 
     [Header("Shield Settings")]
     [SerializeField] float currentShield;
@@ -54,26 +56,32 @@ public class Pulzar : MonoBehaviour
     private Vector3 lastPlayerPos;
     private Vector3 lastEnemyPos;
     private Collider enemyCollider;
+    private AudioSource audioSource;
 
     private void Awake()
     {
-        // Component Reference
         agent = GetComponent<NavMeshAgent>();
         animator = GetComponent<Animator>();
         enemyHealth = GetComponent<EnemyHealth>();
         enemyCollider = GetComponent<Collider>();
 
+        audioSource = GetComponent<AudioSource>();
+        if (audioSource == null)
+            audioSource = gameObject.AddComponent<AudioSource>();
+
+        audioSource.spatialBlend = 1f;
+        audioSource.playOnAwake = false;
+        audioSource.volume = sfxVolume;
+        
         agent.updateRotation = true;
         agent.updateUpAxis = true;
     }
 
     void Start()
     {
-        // Set awal
         lastPlayerPos = player.position;
         lastEnemyPos = transform.position;
 
-        // Pastikan shield 0 saat mulai
         enemyHealth.shield = 0;
         currentShield = 0;
 
@@ -92,15 +100,15 @@ public class Pulzar : MonoBehaviour
         isRaycasting = false;
         playerInSight = false;
 
-        HandleShield(); // Cek jika darah < 100 dan aktifkan shield
+        HandleShield();
 
         if (player == null)
         {
-            Wander();
+            if (!isRaging)
+                Wander();
             return;
         }
 
-        // Deteksi player
         Vector3 directionToPlayer = (player.position - transform.position).normalized;
         distanceToPlayer = Vector3.Distance(transform.position, player.position);
         float angleToPlayer = Vector3.Angle(transform.forward, directionToPlayer);
@@ -126,22 +134,43 @@ public class Pulzar : MonoBehaviour
             }
         }
 
-        if (playerInSight)
+        if (playerInSight && !wasProvoked)
         {
             wasProvoked = true;
-            HandleChaseOrAttack(distanceToPlayer);
+            if (!rageCoroutineRunning)
+                StartCoroutine(TriggerRageAndChase());
         }
-        else if (wasProvoked)
+        else if (wasProvoked && ragePlayed)
         {
             HandleChaseOrAttack(distanceToPlayer);
         }
         else
         {
-            Wander();
+            if (!isRaging)
+                Wander();
         }
 
         lastPlayerPos = player.position;
         lastEnemyPos = transform.position;
+    }
+
+    IEnumerator TriggerRageAndChase()
+    {
+        rageCoroutineRunning = true;
+        isRaging = true;
+
+        agent.isStopped = true;
+        ResetAllAnimationStates();
+        animator.SetBool("isRage", true); // <-- menggunakan bool
+
+        PlayRageSFX();
+
+        yield return new WaitForSeconds(2.05f); // sesuaikan durasi animasi
+
+        animator.SetBool("isRage", false); // reset setelah selesai
+        ragePlayed = true;
+        isRaging = false;
+        rageCoroutineRunning = false;
     }
 
     void HandleShield()
@@ -166,7 +195,7 @@ public class Pulzar : MonoBehaviour
             agent.SetDestination(waypoints[currentWaypointIndex].position);
         }
 
-        SetAnimationState(true, false); // Jalan
+        SetAnimationState(true, false);
     }
 
     void HandleChaseOrAttack(float distance)
@@ -178,7 +207,7 @@ public class Pulzar : MonoBehaviour
             agent.SetDestination(player.position);
 
             isAttacking = false;
-            SetAnimationState(true, false); // Tetap jalan
+            SetAnimationState(true, false);
         }
         else
         {
@@ -192,14 +221,14 @@ public class Pulzar : MonoBehaviour
                 lastAttackTime = Time.time;
                 isAttacking = true;
                 animator.SetTrigger("attack");
+                PlayAttackSFX();
             }
         }
     }
 
     public void DealMeleeDamage()
     {
-        if (!isAttacking) return;
-        if (enemyHealth.shield > 0) return; // Tidak bisa diserang saat shield aktif
+        if (!isAttacking || enemyHealth.shield > 0) return;
 
         Collider[] hits = Physics.OverlapSphere(transform.position, attackRange + 0.5f, playerLayer);
         foreach (var hit in hits)
@@ -217,8 +246,15 @@ public class Pulzar : MonoBehaviour
 
     public void OnTakeDamage()
     {
-        wasProvoked = true;
-        SoundManager.Instance.PlaySound(hurtSFX, 0f, 0f, true, 1f);
+        if (!wasProvoked)
+        {
+            wasProvoked = true;
+            if (!rageCoroutineRunning)
+                StartCoroutine(TriggerRageAndChase());
+        }
+
+        if (hurtSFX != null)
+            SoundManager.Instance.PlaySound(hurtSFX, 0f, 0f, true, 1f);
     }
 
     public void DieTrigger()
@@ -229,12 +265,9 @@ public class Pulzar : MonoBehaviour
             agent.velocity = Vector3.zero;
         }
 
-        animator.SetBool("isWalking", false);
-        animator.SetBool("isIdle", false);
-        animator.ResetTrigger("attack");
+        ResetAllAnimationStates();
         animator.SetTrigger("die");
         animator.SetBool("isDie", true);
-
         this.enabled = false;
 
         if (enemyCollider != null)
@@ -253,10 +286,36 @@ public class Pulzar : MonoBehaviour
         Destroy(gameObject, 2f);
     }
 
+    public void PlayRageSFX()
+    {
+        if (rageSFX != null)
+        {
+            SoundManager.Instance.PlaySound(rageSFX, 0f, .1f, true, 1f);
+        }
+    }
+
+    public void PlayAttackSFX()
+    {
+        if (attackSFX.Length == 0) return;
+        AudioClip clip = attackSFX[Random.Range(0, attackSFX.Length)];
+        audioSource.PlayOneShot(clip, sfxVolume);
+    }
+
     private void SetAnimationState(bool isWalking, bool isIdle)
     {
-        animator.SetBool("isWalking", isWalking);
-        animator.SetBool("isIdle", isIdle);
+        if (!isRaging)
+        {
+            animator.SetBool("isWalking", isWalking);
+            animator.SetBool("isIdle", isIdle);
+        }
+    }
+
+    private void ResetAllAnimationStates()
+    {
+        animator.SetBool("isWalking", false);
+        animator.SetBool("isIdle", false);
+        animator.SetBool("isRage", false);
+        animator.ResetTrigger("attack");
     }
 
     void OnDrawGizmos()

@@ -232,6 +232,7 @@ public class EnemyMelee : MonoBehaviour
 
     void HandleChaseOrAttack(float distance)
     {
+        // Jika shield aktif dan player tidak bergerak, idle
         if (enemyHealth.shield > 0 && Vector3.Distance(player.position, lastPlayerPos) < 0.01f)
         {
             agent.isStopped = true;
@@ -239,26 +240,20 @@ public class EnemyMelee : MonoBehaviour
             return;
         }
 
-        if (distance > attackRange)
-        {
-            agent.isStopped = false;
-            agent.speed = isRage ? chaseSpeed + rageSpeedBoost : chaseSpeed;
-            agent.SetDestination(player.position);
-
-            isAttacking = false;
-            animator.SetBool("isRunning", true);
-            animator.SetBool("isWalking", false);
-            animator.SetBool("isIdle", false);
-            animator.SetBool("isRage", isRage);
-        }
-        else
+        // Jika musuh berada dalam jarak serang
+        if (distance <= attackRange)
         {
             agent.isStopped = true;
-            agent.speed = 0;
+            agent.ResetPath();
+            agent.velocity = Vector3.zero;
+
+            // Matikan semua animasi gerakan
             animator.SetBool("isRunning", false);
             animator.SetBool("isWalking", false);
             animator.SetBool("isIdle", false);
+            animator.SetBool("isRage", isRage);
 
+            // Lakukan serangan jika cooldown sudah selesai
             if (Time.time - lastAttackTime >= attackCooldown)
             {
                 lastAttackTime = Time.time;
@@ -266,7 +261,32 @@ public class EnemyMelee : MonoBehaviour
                 animator.SetTrigger("attack");
             }
         }
+        // Jika musuh di luar jangkauan serang
+        else
+        {
+            agent.isStopped = false;
+            agent.speed = isRage ? chaseSpeed + rageSpeedBoost : chaseSpeed;
+            agent.SetDestination(player.position);
+
+            isAttacking = false;
+
+            // Hanya aktifkan isRunning jika agent benar-benar bergerak
+            if (agent.velocity.magnitude > 0.1f)
+            {
+                animator.SetBool("isRunning", true);
+                animator.SetBool("isWalking", false);
+                animator.SetBool("isIdle", false);
+            }
+            else
+            {
+                SetIdleState();
+            }
+
+            animator.SetBool("isRage", isRage);
+        }
     }
+
+
 
     void Wander()
     {
@@ -313,7 +333,7 @@ public class EnemyMelee : MonoBehaviour
     public void RageSFX()
     {
         //if (rageSFX != null)
-            SoundManager.Instance.PlaySound(rageSFX, 0f, 0f, false, 1f);
+            SoundManager.Instance.PlaySound(rageSFX, 0f, .01f, false, 1f);
     }
 
     public void DisableRage()
