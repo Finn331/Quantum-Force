@@ -37,7 +37,7 @@ public class ZombieAI : MonoBehaviour
     [SerializeField] float currentHP;
 
     private bool isProvoked = false;
-    private bool hasDied = false; // Flag untuk menandai kematian
+    private bool hasDied = false;
 
     [Header("Raycast Settings")]
     public float raycastHeightOffset = 1.2f;
@@ -47,6 +47,9 @@ public class ZombieAI : MonoBehaviour
     [SerializeField] AudioClip rageSFX;
     [SerializeField] AudioClip dieSFX;
     [SerializeField] AudioClip hurtSFX;
+
+    // Variabel untuk cooldown SFX
+    private float lastRageSfxTime = -1f;
 
     void Start()
     {
@@ -64,24 +67,20 @@ public class ZombieAI : MonoBehaviour
 
     void Update()
     {
-        // 1. Cek jika sudah mati, hentikan semua proses
         if (hasDied) return;
 
-        // 2. Cek kondisi kematian (hanya dijalankan sekali)
         if (enemyHealth.health <= 0)
         {
             HandleDeath();
             return;
         }
 
-        // 3. Cek jika target hilang (setelah dipastikan tidak mati)
         if (target == null)
         {
-            HandleWanderingState(); // Kembali wandering jika target hilang
+            HandleWanderingState();
             return;
         }
 
-        // --- Logika AI Normal ---
         float distanceToPlayer = Vector3.Distance(target.position, transform.position);
         bool isDamaged = enemyHealth.health < currentHP;
 
@@ -117,37 +116,25 @@ public class ZombieAI : MonoBehaviour
 
     private void HandleDeath()
     {
-        hasDied = true; // Tandai bahwa sudah mati agar logika ini tidak diulang
+        hasDied = true;
 
-        // Matikan semua animasi gerak
         SetAnimBool("isIdle", false);
         SetAnimBool("isWalking", false);
         SetAnimBool("isRunning", false);
-
-        // Nyalakan animasi kematian
         SetAnimBool("isDead", true);
 
-        // Putar suara kematian
         DieSFX();
 
-        // Matikan komponen AI agar tidak bergerak atau mengganggu
         if (agent.enabled)
         {
             agent.isStopped = true;
             agent.enabled = false;
         }
 
-        // Matikan collider agar tidak menghalangi pemain atau peluru
         GetComponent<Collider>().enabled = false;
-
-        // Hapus zombie dari manager
         ZombieManager.Instance?.UnregisterZombie(this);
-
-        // Opsional: Hancurkan objek setelah beberapa detik
-        // Destroy(gameObject, 5f);
     }
 
-    // --- STATE HANDLERS ---
     private void HandleProvokedState(float distanceToPlayer)
     {
         SetAnimBool("isIdle", false);
@@ -198,7 +185,6 @@ public class ZombieAI : MonoBehaviour
         }
     }
 
-    // --- ACTION HANDLERS ---
     private void HandleRageState()
     {
         if (isRaging)
@@ -232,7 +218,7 @@ public class ZombieAI : MonoBehaviour
         SetAnimBool("isWalking", false);
         SetAnimBool("isRunning", true);
     }
-    // --- UTILITY METHODS ---
+
     private void Provoke()
     {
         if (isProvoked) return;
@@ -247,7 +233,6 @@ public class ZombieAI : MonoBehaviour
         isRaging = true;
         rageTimer = rageDuration;
         SetAnimBool("isRage", true);
-        PlayRageSFX();
     }
 
     public void ReceiveLocalAlert()
@@ -304,14 +289,16 @@ public class ZombieAI : MonoBehaviour
 
     void OnDestroy()
     {
-        // Fungsi ini bisa tetap ada jika Anda menggunakan Destroy()
-        // ZombieManager.Instance?.UnregisterZombie(this);
+        // Dikosongkan karena unregister sudah dipindah ke HandleDeath()
     }
 
-    // SFX HANDLER
+    // --- SFX HANDLER ---
     public void PlayRageSFX()
     {
-        if (rageSFX != null) SoundManager.Instance.PlaySound(rageSFX, 0f, .1f, true, 1f);
+        if (Time.time - lastRageSfxTime < 0.1f) return;
+        lastRageSfxTime = Time.time;
+
+        if (rageSFX != null) SoundManager.Instance.PlaySound(rageSFX, 0, 0, true, 0);
     }
     void DieSFX()
     {
