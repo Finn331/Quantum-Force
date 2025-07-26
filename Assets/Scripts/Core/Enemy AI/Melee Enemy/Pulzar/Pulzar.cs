@@ -144,7 +144,7 @@ public class Pulzar : MonoBehaviour
         enemyHealth.shield = shieldAmount;
         if (shieldVFX != null) shieldVFX.SetActive(true);
         agent.isStopped = true;
-        agent.velocity = Vector3.zero; // Pastikan berhenti total
+        agent.velocity = Vector3.zero;
         SetAnimationState(false, true);
         shieldBreakTimer = 0f;
         Debug.Log("Vulnerable Shield Activated!");
@@ -193,11 +193,9 @@ public class Pulzar : MonoBehaviour
     void HandleVulnerableShield()
     {
         bool playerIsMoving = Vector3.Distance(player.position, lastPlayerPos) > 0.01f;
-
         if (playerIsMoving)
         {
             float distanceToPlayer = Vector3.Distance(transform.position, player.position);
-
             if (distanceToPlayer > attackRange)
             {
                 agent.isStopped = false;
@@ -210,22 +208,15 @@ public class Pulzar : MonoBehaviour
                 agent.isStopped = true;
                 SetAnimationState(false, true);
             }
-
             shieldBreakTimer = 0f;
         }
-        else // Jika Player berusaha untuk diam
+        else
         {
-            // Perintahkan enemy untuk berhenti
             agent.isStopped = true;
             SetAnimationState(false, true);
-
-            // --- PERBAIKAN LOGIKA DI SINI ---
-            // Cek apakah enemy benar-benar sudah berhenti (kecepatannya mendekati nol)
             if (agent.velocity.magnitude < 0.1f)
             {
-                // Jika enemy DAN player sudah diam, baru mulai timer
                 shieldBreakTimer += Time.deltaTime;
-
                 if (shieldBreakTimer >= 5f)
                 {
                     Debug.Log("Shield dihancurkan setelah 5 detik diam!");
@@ -238,7 +229,6 @@ public class Pulzar : MonoBehaviour
             }
             else
             {
-                // Jika enemy masih meluncur/berhenti, jangan mulai timer dulu
                 shieldBreakTimer = 0f;
             }
         }
@@ -359,9 +349,24 @@ public class Pulzar : MonoBehaviour
         Destroy(gameObject, 3f);
     }
 
+    // --- FUNGSI DIPERBAIKI ---
     public void DealMeleeDamage()
     {
+        // Pengecekan awal, jangan lakukan apapun jika tidak sedang menyerang atau shield aktif
         if (currentState != AIState.Attacking || enemyHealth.shield > 0) return;
+
+        // Cek jarak sekali lagi untuk memastikan player masih dalam jangkauan
+        if (Vector3.Distance(transform.position, player.position) <= attackRange)
+        {
+            // Coba dapatkan komponen PlayerStats dari player
+            PlayerStats playerStats = player.GetComponent<PlayerStats>();
+            if (playerStats != null)
+            {
+                // Berikan damage ke player
+                playerStats.Damage(meleeDamage, false);
+                Debug.Log("Player terkena serangan melee sebesar " + meleeDamage + " damage!");
+            }
+        }
     }
 
     public void PlayRageSFX() { if (rageSFX != null) audioSource.PlayOneShot(rageSFX); }
