@@ -12,6 +12,7 @@ TagManager:
   - BodyShot
   - Ladder
   - Pickupable
+  - FallenObject
   layers:
   - Default
   - TransparentFX

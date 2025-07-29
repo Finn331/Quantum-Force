@@ -5,8 +5,8 @@ using System.Collections;
 
 public class Singulra : MonoBehaviour
 {
-    // State Machine Enum untuk kejelasan
-    private enum AIState { Wandering, Chasing, Attacking, Raging, Phase1_VulnerableShield, Phase2_WaypointShield, Phase3_WreckingBallShield, Dead }
+    // State Machine Enum
+    private enum AIState { Wandering, Chasing, Attacking, Raging, Stunned, Phase1_VulnerableShield, Phase2_WaypointShield, Phase3_WreckingBallShield, Dead }
     private AIState currentState;
 
     [Header("Core Components")]
@@ -38,16 +38,27 @@ public class Singulra : MonoBehaviour
     public float acceleration = 12f;
 
     [Header("Player Detection")]
-    public LayerMask obstacleLayerMask;
-    public float fieldOfView = 120f;
-    public float detectionRange = 15f;
-    public float attackRange = 2f;
+    public LayerMask visionBlockLayer;
+    public float detectionRange = 20f;
+    public float attackRange = 3f;
+    [Range(0, 360)]
+    public float fieldOfViewAngle = 120f;
+    public float eyeHeight = 1.5f;
+
+    [Header("Stun Settings")]
+    public float stunDuration = 3f;
 
     [Header("Attack Settings")]
     public float meleeDamage = 20f;
     public float attackCooldown = 2f;
     private float lastAttackTime;
     private bool wasProvoked = false;
+
+    [Header("Rage Mode Settings")]
+    private bool isEnraged = false;
+    public float rageChaseSpeed = 6f;
+    public float rageMeleeDamage = 30f;
+    private const float ENRAGE_THRESHOLD = 0.9f;
 
     [Header("SFX")]
     public AudioClip[] attackSFX;
@@ -63,10 +74,6 @@ public class Singulra : MonoBehaviour
     public float shieldAmount = 99999f;
     private float shieldBreakTimer = 0f;
     private const float SHIELD_BREAK_DELAY = 5f;
-
-    [Header("Stats (For Debugging)")]
-    [SerializeField] float currentHealth;
-    [SerializeField] float currentShield;
 
     private Vector3 lastPlayerPos;
 
@@ -84,18 +91,12 @@ public class Singulra : MonoBehaviour
     void Start()
     {
         currentState = AIState.Wandering;
-
-        // Setup Health & Shield
         enemyHealth.health = maxHealth;
         enemyHealth.shield = 0;
         if (shieldVFX != null) shieldVFX.SetActive(false);
-
-        // Setup AudioSource
         audioSource.spatialBlend = 1f;
         audioSource.playOnAwake = false;
         audioSource.volume = sfxVolume;
-
-        // Setup NavMeshAgent
         agent.speed = walkSpeed;
         agent.angularSpeed = angularSpeed;
         agent.acceleration = acceleration;
@@ -109,20 +110,16 @@ public class Singulra : MonoBehaviour
 
     void Update()
     {
-        currentHealth = enemyHealth.health;
-        currentShield = enemyHealth.shield;
-
         if (player == null || currentState == AIState.Dead) return;
 
-        if (currentState != AIState.Phase1_VulnerableShield &&
-            currentState != AIState.Phase2_WaypointShield &&
-            currentState != AIState.Phase3_WreckingBallShield)
+        if (currentState == AIState.Wandering || currentState == AIState.Chasing || currentState == AIState.Attacking)
         {
             CheckPhaseTriggers();
         }
 
         switch (currentState)
         {
+            case AIState.Stunned: break;
             case AIState.Phase1_VulnerableShield: HandlePhase1Shield(); break;
             case AIState.Phase2_WaypointShield: HandlePhase2Shield(); break;
             case AIState.Phase3_WreckingBallShield: HandlePhase3Shield(); break;
@@ -135,15 +132,88 @@ public class Singulra : MonoBehaviour
     }
     #endregion
 
+    #region Stun Collision
+    private void OnTriggerEnter(Collider other)
+    {
+        //if (other.CompareTag("FallenObject") && currentState != AIState.Dead && currentState != AIState.Stunned)
+        //{
+        //    StartCoroutine(GetStunned());
+        //}
+
+        if (other.gameObject.CompareTag("FallenObject") && currentState != AIState.Dead && currentState != AIState.Stunned)
+        {
+            // Jika terkena objek jatuh, langsung masuk ke state Stunned
+            StartCoroutine(GetStunned());
+        }
+
+    }
+
+
+    // --- FUNGSI STUN DIPERBAIKI ---
+    IEnumerator GetStunned()
+    {
+        Debug.Log("Singulra terkena STUN!");
+        AIState stateBeforeStun = currentState;
+        currentState = AIState.Stunned;
+
+        agent.isStopped = true;
+        agent.velocity = Vector3.zero;
+
+        // Matikan semua animasi gerak lalu picu animasi stun
+        ResetAllAnimationStates();
+        animator.SetTrigger("stunned");
+
+        yield return new WaitForSeconds(stunDuration);
+
+        Debug.Log("Stun selesai, kembali ke state sebelumnya.");
+        currentState = stateBeforeStun;
+        if (currentState != AIState.Dead) agent.isStopped = false;
+    }
+    #endregion
+
     #region Phase Mechanics
     void CheckPhaseTriggers()
     {
         float currentHP = enemyHealth.health;
 
-        if (currentHP <= phase3_Threshold && !phase3Triggered) ActivatePhase3Shield();
-        else if (currentHP <= phase2b_Threshold && !phase2bTriggered) ActivatePhase2Shield(phase2b_Waypoint, ref phase2bTriggered);
-        else if (currentHP <= phase2a_Threshold && !phase2aTriggered) ActivatePhase2Shield(phase2a_Waypoint, ref phase2aTriggered);
-        else if (currentHP <= phase1_Threshold && !phase1Triggered) ActivatePhase1Shield();
+        if (!isEnraged && currentHP <= maxHealth * ENRAGE_THRESHOLD)
+        {
+            ActivateEnrageMode();
+        }
+
+        if (currentHP <= phase3_Threshold && !phase3Triggered) StartCoroutine(EnterPhase(AIState.Phase3_WreckingBallShield));
+        else if (currentHP <= phase2b_Threshold && !phase2bTriggered) StartCoroutine(EnterPhase(AIState.Phase2_WaypointShield, phase2b_Waypoint, "2b"));
+        else if (currentHP <= phase2a_Threshold && !phase2aTriggered) StartCoroutine(EnterPhase(AIState.Phase2_WaypointShield, phase2a_Waypoint, "2a"));
+        else if (currentHP <= phase1_Threshold && !phase1Triggered) StartCoroutine(EnterPhase(AIState.Phase1_VulnerableShield));
+    }
+
+    void ActivateEnrageMode()
+    {
+        isEnraged = true;
+        chaseSpeed = rageChaseSpeed;
+        meleeDamage = rageMeleeDamage;
+        PlaySFX(rageSFX);
+        Debug.Log("ENRAGE MODE ACTIVATED!");
+    }
+
+    IEnumerator EnterPhase(AIState nextPhase, Transform waypoint = null, string phaseIdentifier = "")
+    {
+        currentState = AIState.Raging;
+        agent.isStopped = true;
+        ResetAllAnimationStates();
+        animator.SetBool("isRage", true);
+        PlaySFX(rageSFX);
+        yield return new WaitForSeconds(2.0f);
+        animator.SetBool("isRage", false);
+        switch (nextPhase)
+        {
+            case AIState.Phase1_VulnerableShield: ActivatePhase1Shield(); break;
+            case AIState.Phase2_WaypointShield:
+                if (phaseIdentifier == "2a") ActivatePhase2Shield(waypoint, ref phase2aTriggered);
+                else if (phaseIdentifier == "2b") ActivatePhase2Shield(waypoint, ref phase2bTriggered);
+                break;
+            case AIState.Phase3_WreckingBallShield: ActivatePhase3Shield(); break;
+        }
     }
 
     void ActivatePhase1Shield()
@@ -152,7 +222,7 @@ public class Singulra : MonoBehaviour
         currentState = AIState.Phase1_VulnerableShield;
         ActivateShieldVisuals();
         agent.isStopped = true;
-        SetAnimationState(false, true);
+        SetAnimationState(false, false, true);
         shieldBreakTimer = 0f;
     }
 
@@ -161,14 +231,23 @@ public class Singulra : MonoBehaviour
         bool playerIsMoving = Vector3.Distance(player.position, lastPlayerPos) > 0.01f;
         if (playerIsMoving)
         {
+            agent.isStopped = false;
+            agent.speed = chaseSpeed;
+            agent.SetDestination(player.position);
+            SetAnimationState(false, true, false);
             shieldBreakTimer = 0f;
         }
-        else if (agent.velocity.magnitude < 0.1f)
+        else
         {
-            shieldBreakTimer += Time.deltaTime;
-            if (shieldBreakTimer >= SHIELD_BREAK_DELAY)
+            agent.isStopped = true;
+            SetAnimationState(false, false, true);
+            if (agent.velocity.magnitude < 0.1f)
             {
-                BreakShield();
+                shieldBreakTimer += Time.deltaTime;
+                if (shieldBreakTimer >= SHIELD_BREAK_DELAY)
+                {
+                    BreakShield();
+                }
             }
         }
     }
@@ -195,11 +274,11 @@ public class Singulra : MonoBehaviour
         if (!agent.pathPending && agent.remainingDistance < agent.stoppingDistance)
         {
             agent.isStopped = true;
-            SetAnimationState(false, true);
+            SetAnimationState(false, false, true);
         }
         else
         {
-            SetAnimationState(true, false);
+            SetAnimationState(true, false, false);
         }
     }
 
@@ -214,42 +293,35 @@ public class Singulra : MonoBehaviour
     void HandlePhase3Shield()
     {
         agent.isStopped = true;
-        SetAnimationState(false, true);
+        SetAnimationState(false, false, true);
     }
     #endregion
 
     #region Public Event Functions
-    public void BreakPhase2Shield()
-    {
-        if (currentState == AIState.Phase2_WaypointShield) BreakShield();
-    }
-
-    public void BreakPhase3ShieldByWreckingBall()
-    {
-        if (currentState == AIState.Phase3_WreckingBallShield) BreakShield();
-    }
+    public void BreakPhase2Shield() { if (currentState == AIState.Phase2_WaypointShield) BreakShield(); }
+    public void BreakPhase3ShieldByWreckingBall() { if (currentState == AIState.Phase3_WreckingBallShield) BreakShield(); }
     #endregion
 
     #region Standard AI Behavior
     void DetectPlayer()
     {
-        if (wasProvoked) return;
-
+        if (wasProvoked || player == null) return;
         float distanceToPlayer = Vector3.Distance(transform.position, player.position);
         if (distanceToPlayer > detectionRange) return;
 
         Vector3 directionToPlayer = (player.position - transform.position).normalized;
-        if (Vector3.Angle(transform.forward, directionToPlayer) > fieldOfView / 2) return;
-
-        Vector3 rayOrigin = transform.position + Vector3.up * 1.5f;
-        if (!Physics.Raycast(rayOrigin, directionToPlayer, distanceToPlayer, obstacleLayerMask))
+        if (Vector3.Angle(transform.forward, directionToPlayer) < fieldOfViewAngle / 2)
         {
-            wasProvoked = true;
-            StartCoroutine(TriggerRage());
+            Vector3 eyePosition = transform.position + Vector3.up * eyeHeight;
+            if (!Physics.Raycast(eyePosition, directionToPlayer, distanceToPlayer, visionBlockLayer))
+            {
+                wasProvoked = true;
+                StartCoroutine(TriggerInitialRage());
+            }
         }
     }
 
-    IEnumerator TriggerRage()
+    IEnumerator TriggerInitialRage()
     {
         currentState = AIState.Raging;
         agent.isStopped = true;
@@ -268,7 +340,7 @@ public class Singulra : MonoBehaviour
         if (wanderWaypoints.Length == 0)
         {
             agent.isStopped = true;
-            SetAnimationState(false, true);
+            SetAnimationState(false, false, true);
             return;
         }
         if (!agent.pathPending && agent.remainingDistance < agent.stoppingDistance)
@@ -276,7 +348,7 @@ public class Singulra : MonoBehaviour
             currentWanderWaypointIndex = (currentWanderWaypointIndex + 1) % wanderWaypoints.Length;
             agent.SetDestination(wanderWaypoints[currentWanderWaypointIndex].position);
         }
-        SetAnimationState(true, false);
+        SetAnimationState(true, false, false);
     }
 
     void Chase()
@@ -284,7 +356,7 @@ public class Singulra : MonoBehaviour
         agent.speed = chaseSpeed;
         agent.isStopped = false;
         agent.SetDestination(player.position);
-        SetAnimationState(true, false);
+        SetAnimationState(false, true, false);
 
         if (Vector3.Distance(transform.position, player.position) <= agent.stoppingDistance)
         {
@@ -298,13 +370,28 @@ public class Singulra : MonoBehaviour
         Vector3 direction = (player.position - transform.position).normalized;
         Quaternion lookRotation = Quaternion.LookRotation(new Vector3(direction.x, 0, direction.z));
         transform.rotation = Quaternion.Slerp(transform.rotation, lookRotation, Time.deltaTime * 5f);
-        SetAnimationState(false, false);
+        SetAnimationState(false, false, false);
 
         if (Time.time - lastAttackTime >= attackCooldown)
         {
             lastAttackTime = Time.time;
-            animator.SetTrigger("attack");
-            PlayAttackSFX();
+
+            if (isEnraged)
+            {
+                int attackChoice = Random.Range(0, 2);
+                if (attackChoice == 0)
+                {
+                    animator.SetTrigger("attack");
+                }
+                else
+                {
+                    animator.SetTrigger("attack2");
+                }
+            }
+            else
+            {
+                animator.SetTrigger("attack");
+            }
         }
 
         if (Vector3.Distance(transform.position, player.position) > agent.stoppingDistance)
@@ -320,14 +407,13 @@ public class Singulra : MonoBehaviour
         if (currentState == AIState.Wandering && !wasProvoked)
         {
             wasProvoked = true;
-            StartCoroutine(TriggerRage());
+            StartCoroutine(TriggerInitialRage());
         }
         PlaySFX(hurtSFX);
     }
 
     public void Die()
     {
-        // Cek apakah sedang dalam fase perisai yang butuh dihancurkan secara eksternal
         if (currentState == AIState.Phase2_WaypointShield || currentState == AIState.Phase3_WreckingBallShield)
         {
             BreakShield();
@@ -351,8 +437,6 @@ public class Singulra : MonoBehaviour
         if (currentState != AIState.Attacking || enemyHealth.shield > 0) return;
         if (Vector3.Distance(transform.position, player.position) <= attackRange)
         {
-            // Ganti PlayerStats dengan skrip health pemain Anda
-            // player.GetComponent<PlayerStats>()?.Damage(meleeDamage, false);
             Debug.Log("Player terkena serangan melee sebesar " + meleeDamage + " damage!");
         }
     }
@@ -371,7 +455,7 @@ public class Singulra : MonoBehaviour
     }
     #endregion
 
-    #region Utility
+    #region Utility & Animation
     void ActivateShieldVisuals()
     {
         enemyHealth.shield = shieldAmount;
@@ -388,17 +472,31 @@ public class Singulra : MonoBehaviour
         agent.isStopped = false;
     }
 
-    private void SetAnimationState(bool isWalking, bool isIdle)
+    private void SetAnimationState(bool isWalking, bool isRunning, bool isIdle)
     {
         animator.SetBool("isWalking", isWalking);
+        animator.SetBool("isRunning", isRunning);
         animator.SetBool("isIdle", isIdle);
     }
 
     private void ResetAllAnimationStates()
     {
-        SetAnimationState(false, false);
+        SetAnimationState(false, false, false);
         animator.SetBool("isRage", false);
         animator.ResetTrigger("attack");
+        animator.ResetTrigger("attack2");
+        animator.ResetTrigger("stunned"); // Reset trigger stun untuk jaga-jaga
     }
     #endregion
+
+    private void OnDrawGizmosSelected()
+    {
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawWireSphere(transform.position, detectionRange);
+        Vector3 fovLine1 = Quaternion.AngleAxis(fieldOfViewAngle / 2, transform.up) * transform.forward * detectionRange;
+        Vector3 fovLine2 = Quaternion.AngleAxis(-fieldOfViewAngle / 2, transform.up) * transform.forward * detectionRange;
+        Gizmos.color = Color.cyan;
+        Gizmos.DrawRay(transform.position, fovLine1);
+        Gizmos.DrawRay(transform.position, fovLine2);
+    }
 }
