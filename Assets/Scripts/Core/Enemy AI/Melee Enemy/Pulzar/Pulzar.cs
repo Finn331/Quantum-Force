@@ -1,21 +1,32 @@
 ﻿using UnityEngine;
 using UnityEngine.AI;
 using cowsins;
+using System.Collections;
 
 public class Pulzar : MonoBehaviour
 {
+    // State Machine Enum untuk kejelasan
+    private enum AIState { Wandering, Chasing, Attacking, Raging, VulnerableShield, IndestructibleShield, Dead }
+    private AIState currentState;
+
     [Header("Waypoint Settings")]
     public Transform[] waypoints;
     private int currentWaypointIndex = 0;
 
-    [Header("Navigation")]
+    [Tooltip("Waypoint tujuan saat HP musuh mencapai 100 (fase perisai terakhir).")]
+    public Transform finalPhaseWaypoint;
+
+    [Header("Navigation & Movement Feel")]
     private NavMeshAgent agent;
     public float walkSpeed = 2f;
     public float chaseSpeed = 4f;
+    [Tooltip("Seberapa cepat enemy berputar. Nilai rendah membuat putaran lebih lebar & natural.")]
+    public float angularSpeed = 240f;
+    [Tooltip("Seberapa cepat enemy mencapai kecepatan penuh. Nilai rendah lebih mulus.")]
+    public float acceleration = 12f;
 
     [Header("Player Detection")]
     public Transform player;
-    public LayerMask playerLayer;
     public LayerMask obstacleLayerMask;
     public float fieldOfView = 120f;
     public float detectionRange = 15f;
@@ -27,230 +38,343 @@ public class Pulzar : MonoBehaviour
     private float lastAttackTime;
 
     [Header("Combat Awareness")]
-    private bool isAttacking = false;
-    private bool playerInSight = false;
-    private Vector3 rayDirection;
-    private bool isRaycasting;
-    public bool wasProvoked = false;
-
-    [Header("Footstep Sounds")]
-    public AudioClip[] walkFootsteps;
-    public AudioClip[] runFootsteps;
-    public float footstepVolume = 1f;
+    private bool wasProvoked = false;
 
     [Header("SFX")]
+    public AudioClip[] attackSFX;
+    [SerializeField] AudioClip rageSFX;
     public AudioClip hurtSFX;
     public AudioClip deathSFX;
+    public float sfxVolume = 1f;
 
     [Header("Shield Settings")]
+    public GameObject shieldVFX;
+    public float shieldAmount = 99999f;
+    private bool shieldTriggeredAt250, shieldTriggeredAt200, shieldTriggeredAt150, indestructibleShieldTriggered;
+    private float shieldBreakTimer = 0f;
+
+    [Header("Stats")]
+    [SerializeField] float currentHealth;
     [SerializeField] float currentShield;
-    [SerializeField] float currentHP;
-    [SerializeField] float shieldAmount = 1000000f;
-    private bool shieldActivated = false;
 
     private EnemyHealth enemyHealth;
     private Animator animator;
-    private float distanceToPlayer;
     private Vector3 lastPlayerPos;
     private Vector3 lastEnemyPos;
     private Collider enemyCollider;
+    private AudioSource audioSource;
 
     private void Awake()
     {
-        // Component Reference
         agent = GetComponent<NavMeshAgent>();
         animator = GetComponent<Animator>();
         enemyHealth = GetComponent<EnemyHealth>();
         enemyCollider = GetComponent<Collider>();
-
-        agent.updateRotation = true;
-        agent.updateUpAxis = true;
+        audioSource = GetComponent<AudioSource>();
+        if (audioSource == null) audioSource = gameObject.AddComponent<AudioSource>();
+        audioSource.spatialBlend = 1f;
+        audioSource.playOnAwake = false;
+        audioSource.volume = sfxVolume;
     }
 
     void Start()
     {
-        // Set awal
-        lastPlayerPos = player.position;
-        lastEnemyPos = transform.position;
-
-        // Pastikan shield 0 saat mulai
+        currentState = AIState.Wandering;
         enemyHealth.shield = 0;
-        currentShield = 0;
+        if (shieldVFX != null) shieldVFX.SetActive(false);
 
         agent.speed = walkSpeed;
-        agent.angularSpeed = 720f;
-        agent.acceleration = 16f;
+        agent.angularSpeed = angularSpeed;
+        agent.acceleration = acceleration;
 
-        if (waypoints.Length > 0)
-            agent.SetDestination(waypoints[currentWaypointIndex].position);
+        if (waypoints.Length > 0) agent.SetDestination(waypoints[currentWaypointIndex].position);
     }
 
     void Update()
     {
-        currentHP = enemyHealth.health;
+        currentHealth = enemyHealth.health;
         currentShield = enemyHealth.shield;
-        isRaycasting = false;
-        playerInSight = false;
 
-        HandleShield(); // Cek jika darah < 100 dan aktifkan shield
+        if (player == null || currentState == AIState.Dead) return;
 
-        if (player == null)
+        if (currentState != AIState.VulnerableShield)
         {
-            Wander();
-            return;
+            CheckShieldTriggers();
         }
 
-        // Deteksi player
-        Vector3 directionToPlayer = (player.position - transform.position).normalized;
-        distanceToPlayer = Vector3.Distance(transform.position, player.position);
-        float angleToPlayer = Vector3.Angle(transform.forward, directionToPlayer);
-
-        Vector3 rayOrigin = transform.position + Vector3.up * 0.5f;
-        Vector3 rayTarget = player.position + Vector3.up * 0.5f;
-        rayDirection = (rayTarget - rayOrigin).normalized;
-        isRaycasting = true;
-
-        if (distanceToPlayer <= detectionRange && angleToPlayer <= fieldOfView / 2)
+        switch (currentState)
         {
-            RaycastHit[] hits = Physics.RaycastAll(rayOrigin, rayDirection, detectionRange);
-            foreach (RaycastHit hit in hits)
-            {
-                if (((1 << hit.collider.gameObject.layer) & obstacleLayerMask) != 0)
-                    break;
-
-                if (hit.transform.CompareTag("Player"))
-                {
-                    playerInSight = true;
-                    break;
-                }
-            }
-        }
-
-        if (playerInSight)
-        {
-            wasProvoked = true;
-            HandleChaseOrAttack(distanceToPlayer);
-        }
-        else if (wasProvoked)
-        {
-            HandleChaseOrAttack(distanceToPlayer);
-        }
-        else
-        {
-            Wander();
+            case AIState.VulnerableShield:
+                HandleVulnerableShield();
+                break;
+            case AIState.IndestructibleShield:
+                HandleIndestructibleShield();
+                break;
+            case AIState.Raging:
+                break;
+            case AIState.Wandering:
+                Wander();
+                DetectPlayer();
+                break;
+            case AIState.Chasing:
+                Chase();
+                break;
+            case AIState.Attacking:
+                Attack();
+                break;
         }
 
         lastPlayerPos = player.position;
         lastEnemyPos = transform.position;
     }
 
-    void HandleShield()
+    void CheckShieldTriggers()
     {
-        if (!shieldActivated && currentHP <= 100)
+        float currentHP = enemyHealth.health;
+        if (currentHP <= 250 && !shieldTriggeredAt250) ActivateVulnerableShield(ref shieldTriggeredAt250);
+        else if (currentHP <= 200 && !shieldTriggeredAt200) ActivateVulnerableShield(ref shieldTriggeredAt200);
+        else if (currentHP <= 150 && !shieldTriggeredAt150) ActivateVulnerableShield(ref shieldTriggeredAt150);
+        else if (currentHP <= 100 && !indestructibleShieldTriggered) ActivateIndestructibleShield();
+    }
+
+    void ActivateVulnerableShield(ref bool triggerFlag)
+    {
+        triggerFlag = true;
+        currentState = AIState.VulnerableShield;
+        enemyHealth.shield = shieldAmount;
+        if (shieldVFX != null) shieldVFX.SetActive(true);
+        agent.isStopped = true;
+        agent.velocity = Vector3.zero;
+        SetAnimationState(false, true);
+        shieldBreakTimer = 0f;
+        Debug.Log("Vulnerable Shield Activated!");
+    }
+
+    void ActivateIndestructibleShield()
+    {
+        indestructibleShieldTriggered = true;
+        currentState = AIState.IndestructibleShield;
+        enemyHealth.shield = shieldAmount;
+        if (shieldVFX != null) shieldVFX.SetActive(true);
+        if (finalPhaseWaypoint != null)
         {
-            enemyHealth.shield = shieldAmount;
-            currentShield = shieldAmount;
-            shieldActivated = true;
+            agent.isStopped = false;
+            agent.speed = walkSpeed;
+            agent.SetDestination(finalPhaseWaypoint.position);
+            SetAnimationState(true, false);
         }
+        else
+        {
+            agent.isStopped = true;
+            SetAnimationState(false, true);
+        }
+        Debug.Log("Indestructible Shield Activated!");
+    }
+
+    void HandleIndestructibleShield()
+    {
+        if (finalPhaseWaypoint == null)
+        {
+            agent.isStopped = true;
+            SetAnimationState(false, true);
+            return;
+        }
+        if (!agent.pathPending && agent.remainingDistance < 0.5f)
+        {
+            agent.isStopped = true;
+            SetAnimationState(false, true);
+        }
+        else
+        {
+            SetAnimationState(true, false);
+        }
+    }
+
+    void HandleVulnerableShield()
+    {
+        bool playerIsMoving = Vector3.Distance(player.position, lastPlayerPos) > 0.01f;
+        if (playerIsMoving)
+        {
+            float distanceToPlayer = Vector3.Distance(transform.position, player.position);
+            if (distanceToPlayer > attackRange)
+            {
+                agent.isStopped = false;
+                agent.speed = chaseSpeed;
+                agent.SetDestination(player.position);
+                SetAnimationState(true, false);
+            }
+            else
+            {
+                agent.isStopped = true;
+                SetAnimationState(false, true);
+            }
+            shieldBreakTimer = 0f;
+        }
+        else
+        {
+            agent.isStopped = true;
+            SetAnimationState(false, true);
+            if (agent.velocity.magnitude < 0.1f)
+            {
+                shieldBreakTimer += Time.deltaTime;
+                if (shieldBreakTimer >= 5f)
+                {
+                    Debug.Log("Shield dihancurkan setelah 5 detik diam!");
+                    enemyHealth.shield = 0;
+                    if (shieldVFX != null) shieldVFX.SetActive(false);
+                    shieldBreakTimer = 0f;
+                    currentState = AIState.Chasing;
+                    agent.isStopped = false;
+                }
+            }
+            else
+            {
+                shieldBreakTimer = 0f;
+            }
+        }
+    }
+
+    void DetectPlayer()
+    {
+        if (player == null) return;
+        float distanceToPlayer = Vector3.Distance(transform.position, player.position);
+        if (distanceToPlayer > detectionRange) return;
+        Vector3 directionToPlayer = (player.position - transform.position).normalized;
+        if (Vector3.Angle(transform.forward, directionToPlayer) > fieldOfView / 2) return;
+        Vector3 rayOrigin = transform.position + Vector3.up * 0.5f;
+        if (!Physics.Raycast(rayOrigin, directionToPlayer, distanceToPlayer, obstacleLayerMask))
+        {
+            if (!wasProvoked)
+            {
+                wasProvoked = true;
+                StartCoroutine(TriggerRage());
+            }
+        }
+    }
+
+    IEnumerator TriggerRage()
+    {
+        currentState = AIState.Raging;
+        agent.isStopped = true;
+        ResetAllAnimationStates();
+        animator.SetBool("isRage", true);
+        PlayRageSFX();
+        yield return new WaitForSeconds(2.05f);
+        animator.SetBool("isRage", false);
+        currentState = AIState.Chasing;
+        agent.isStopped = false;
     }
 
     void Wander()
     {
-        if (waypoints.Length == 0) return;
-
         agent.speed = walkSpeed;
-
+        if (waypoints.Length == 0)
+        {
+            agent.isStopped = true;
+            SetAnimationState(false, true);
+            return;
+        }
         if (!agent.pathPending && agent.remainingDistance < 0.5f)
         {
             currentWaypointIndex = (currentWaypointIndex + 1) % waypoints.Length;
             agent.SetDestination(waypoints[currentWaypointIndex].position);
         }
-
-        SetAnimationState(true, false); // Jalan
+        SetAnimationState(true, false);
     }
 
-    void HandleChaseOrAttack(float distance)
+    void Chase()
     {
-        if (distance > attackRange)
+        agent.speed = chaseSpeed;
+        float distance = Vector3.Distance(transform.position, player.position);
+        if (distance <= attackRange)
         {
-            agent.isStopped = false;
-            agent.speed = chaseSpeed;
-            agent.SetDestination(player.position);
-
-            isAttacking = false;
-            SetAnimationState(true, false); // Tetap jalan
+            currentState = AIState.Attacking;
         }
         else
         {
-            agent.isStopped = true;
-            agent.speed = 0f;
-
-            SetAnimationState(false, false);
-
-            if (Time.time - lastAttackTime >= attackCooldown)
-            {
-                lastAttackTime = Time.time;
-                isAttacking = true;
-                animator.SetTrigger("attack");
-            }
+            agent.isStopped = false;
+            agent.SetDestination(player.position);
+            SetAnimationState(true, false);
         }
     }
 
-    public void DealMeleeDamage()
+    void Attack()
     {
-        if (!isAttacking) return;
-        if (enemyHealth.shield > 0) return; // Tidak bisa diserang saat shield aktif
-
-        Collider[] hits = Physics.OverlapSphere(transform.position, attackRange + 0.5f, playerLayer);
-        foreach (var hit in hits)
+        agent.isStopped = true;
+        Vector3 direction = (player.position - transform.position).normalized;
+        Quaternion lookRotation = Quaternion.LookRotation(new Vector3(direction.x, 0, direction.z));
+        transform.rotation = Quaternion.Slerp(transform.rotation, lookRotation, Time.deltaTime * 5f);
+        SetAnimationState(false, false);
+        if (Time.time - lastAttackTime >= attackCooldown)
         {
-            if (hit.CompareTag("Player"))
-            {
-                var stats = hit.GetComponent<PlayerStats>();
-                if (stats != null)
-                {
-                    stats.Damage(meleeDamage, false);
-                }
-            }
+            lastAttackTime = Time.time;
+            animator.SetTrigger("attack");
+            PlayAttackSFX();
+        }
+        if (Vector3.Distance(transform.position, player.position) > attackRange)
+        {
+            currentState = AIState.Chasing;
         }
     }
 
     public void OnTakeDamage()
     {
-        wasProvoked = true;
-        SoundManager.Instance.PlaySound(hurtSFX, 0f, 0f, true, 1f);
-    }
-
-    public void DieTrigger()
-    {
-        if (agent != null)
+        if (currentState == AIState.Wandering && !wasProvoked)
         {
-            agent.isStopped = true;
-            agent.velocity = Vector3.zero;
+            wasProvoked = true;
+            StartCoroutine(TriggerRage());
         }
-
-        animator.SetBool("isWalking", false);
-        animator.SetBool("isIdle", false);
-        animator.ResetTrigger("attack");
-        animator.SetTrigger("die");
-        animator.SetBool("isDie", true);
-
-        this.enabled = false;
-
-        if (enemyCollider != null)
-        {
-            enemyCollider.isTrigger = true;
-        }
-
-        if (deathSFX != null)
-        {
-            SoundManager.Instance.PlaySound(deathSFX, 0f, 0f, true, 1f);
-        }
+        if (hurtSFX != null && audioSource != null) audioSource.PlayOneShot(hurtSFX);
     }
 
     public void Die()
     {
-        Destroy(gameObject, 2f);
+        if (currentState == AIState.IndestructibleShield)
+        {
+            Debug.Log("Perisai terakhir dihancurkan secara paksa!");
+            enemyHealth.shield = 0;
+            if (shieldVFX != null) shieldVFX.SetActive(false);
+        }
+        DieTrigger();
+    }
+
+    private void DieTrigger()
+    {
+        currentState = AIState.Dead;
+        if (agent != null) agent.isStopped = true;
+        ResetAllAnimationStates();
+        animator.SetBool("isDie", true);
+        if (deathSFX != null && audioSource != null) audioSource.PlayOneShot(deathSFX);
+        if (enemyCollider != null) enemyCollider.enabled = false;
+        Destroy(gameObject, 3f);
+    }
+
+    // --- FUNGSI DIPERBAIKI ---
+    public void DealMeleeDamage()
+    {
+        // Pengecekan awal, jangan lakukan apapun jika tidak sedang menyerang atau shield aktif
+        if (currentState != AIState.Attacking || enemyHealth.shield > 0) return;
+
+        // Cek jarak sekali lagi untuk memastikan player masih dalam jangkauan
+        if (Vector3.Distance(transform.position, player.position) <= attackRange)
+        {
+            // Coba dapatkan komponen PlayerStats dari player
+            PlayerStats playerStats = player.GetComponent<PlayerStats>();
+            if (playerStats != null)
+            {
+                // Berikan damage ke player
+                playerStats.Damage(meleeDamage, false);
+                Debug.Log("Player terkena serangan melee sebesar " + meleeDamage + " damage!");
+            }
+        }
+    }
+
+    public void PlayRageSFX() { if (rageSFX != null) audioSource.PlayOneShot(rageSFX); }
+    public void PlayAttackSFX()
+    {
+        if (attackSFX.Length == 0) return;
+        AudioClip clip = attackSFX[Random.Range(0, attackSFX.Length)];
+        audioSource.PlayOneShot(clip, sfxVolume);
     }
 
     private void SetAnimationState(bool isWalking, bool isIdle)
@@ -259,15 +383,26 @@ public class Pulzar : MonoBehaviour
         animator.SetBool("isIdle", isIdle);
     }
 
-    void OnDrawGizmos()
+    private void ResetAllAnimationStates()
     {
-        if (isRaycasting)
-        {
-            Gizmos.color = Color.yellow;
-            Gizmos.DrawRay(transform.position + Vector3.up * 0.5f, rayDirection * detectionRange);
-        }
+        SetAnimationState(false, false);
+        animator.SetBool("isRage", false);
+        animator.ResetTrigger("attack");
+    }
 
+    void OnDrawGizmosSelected()
+    {
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawWireSphere(transform.position, detectionRange);
         Gizmos.color = Color.red;
         Gizmos.DrawWireSphere(transform.position, attackRange);
+        if (player != null)
+        {
+            Vector3 fovLine1 = Quaternion.AngleAxis(fieldOfView / 2, transform.up) * transform.forward * detectionRange;
+            Vector3 fovLine2 = Quaternion.AngleAxis(-fieldOfView / 2, transform.up) * transform.forward * detectionRange;
+            Gizmos.color = Color.cyan;
+            Gizmos.DrawRay(transform.position, fovLine1);
+            Gizmos.DrawRay(transform.position, fovLine2);
+        }
     }
 }

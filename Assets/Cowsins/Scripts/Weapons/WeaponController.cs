@@ -1271,7 +1271,7 @@ namespace cowsins
         private float evaluationProgress, evaluationProgressX;
         private void HandleRecoil()
         {
-            if (weapon == null || !weapon.applyRecoil)
+            if (weapon == null || !weapon.applyRecoil || id.bulletsLeftInMagazine <= 0)
             {
                 cameraPivot.GetChild(0).localRotation = Quaternion.Lerp(cameraPivot.GetChild(0).localRotation, Quaternion.Euler(Vector3.zero), 3 * Time.deltaTime);
                 return;
