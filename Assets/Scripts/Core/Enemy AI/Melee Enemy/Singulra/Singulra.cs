@@ -192,7 +192,7 @@ public class Singulra : MonoBehaviour
         isEnraged = true;
         chaseSpeed = rageChaseSpeed;
         meleeDamage = rageMeleeDamage;
-        PlaySFX(rageSFX);
+        //PlaySFX(rageSFX);
         Debug.Log("ENRAGE MODE ACTIVATED!");
     }
 
@@ -451,7 +451,8 @@ public class Singulra : MonoBehaviour
 
     private void PlaySFX(AudioClip clip)
     {
-        if (clip != null && audioSource != null) audioSource.PlayOneShot(clip, sfxVolume);
+        //if (clip != null && audioSource != null) audioSource.PlayOneShot(clip, sfxVolume);
+        if (clip != null && audioSource != null) SoundManager.Instance.PlaySound(clip, 0f, 0f, true, 0f);
     }
     #endregion
 

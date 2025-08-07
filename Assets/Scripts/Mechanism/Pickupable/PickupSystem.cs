@@ -1,29 +1,39 @@
 using UnityEngine;
+using cowsins; // Hapus atau ganti baris ini jika Anda tidak menggunakan namespace 'cowsins'
 
 public class PickupSystem : MonoBehaviour
 {
     public float pickupRange = 3f;
     public Transform holdPoint;
-    public float throwForce = 500f;
+    public float throwForceMultiplier = 100f;
+
+    [Header("Physics Settings")]
+    [Tooltip("Seberapa kuat objek 'tertarik' ke titik pegang.")]
+    public float holdSpeed = 20f;
 
     [Header("Weapon Check")]
-    public Transform weaponHolster; // drag weapon holster di inspector
+    public Transform weaponHolster;
 
     private GameObject heldObject;
     private Rigidbody heldRb;
-    private Collider heldCollider;
+    private Collider playerCollider; // Variabel baru untuk menyimpan collider pemain
+
+    private void Awake()
+    {
+        // Dapatkan komponen collider dari pemain saat game dimulai
+        playerCollider = GetComponent<Collider>();
+    }
+
+    private void FixedUpdate()
+    {
+        if (heldObject != null)
+        {
+            MoveObjectWithPhysics();
+        }
+    }
 
     void Update()
     {
-        // Example Input Pickup Key
-        //if (Input.GetKeyDown(KeyCode.E))
-        //{
-        //    if (heldObject == null)
-        //    {
-        //        TryPickup();
-        //    }
-        //}
-
         if (Input.GetKeyDown(KeyCode.G))
         {
             if (heldObject != null)
@@ -31,81 +41,110 @@ public class PickupSystem : MonoBehaviour
                 ThrowObject();
             }
         }
-
-        if (heldObject != null)
-        {
-            heldObject.transform.position = holdPoint.position;
-        }
     }
 
     public void TryPickup()
     {
-        // Check if player is holding a weapon
-        if (weaponHolster != null && weaponHolster.childCount > 0)
+        if (IsHoldingWeapon())
         {
-            bool hasActiveWeapon = false;
-
-            foreach (Transform child in weaponHolster)
-            {
-                if (child.gameObject.activeInHierarchy)
-                {
-                    hasActiveWeapon = true;
-                    break;
-                }
-            }
-
-            if (hasActiveWeapon)
-            {
-                Debug.Log("Cannot pick up object while holding a weapon.");
-                return; // Prevent pickup if a weapon is currently held
-            }
+            Debug.Log("Cannot pick up object while holding a weapon.");
+            return;
         }
 
         Camera cam = Camera.main;
         Ray ray = cam.ScreenPointToRay(new Vector3(Screen.width / 2, Screen.height / 2));
-        RaycastHit hit;
-
-        if (Physics.Raycast(ray, out hit, pickupRange))
+        if (Physics.Raycast(ray, out RaycastHit hit, pickupRange))
         {
-            if (hit.collider.CompareTag("Pickupable"))
+            if (hit.collider.TryGetComponent(out Pickupable pickupableObject))
             {
-                heldObject = hit.collider.gameObject;
+                heldObject = pickupableObject.gameObject;
                 heldRb = heldObject.GetComponent<Rigidbody>();
+                Collider heldCollider = heldObject.GetComponent<Collider>();
 
                 if (heldRb != null)
                 {
-                    heldRb.useGravity = false;
-                    heldRb.isKinematic = true;
-                    heldCollider = heldObject.GetComponent<Collider>();
-
-                    if (heldCollider != null)
-                        heldCollider.enabled = false;
+                    heldRb.useGravity = true;
+                    heldRb.freezeRotation = true;
+                    heldRb.collisionDetectionMode = CollisionDetectionMode.Continuous;
                 }
 
-                heldObject.transform.position = holdPoint.position;
-                heldObject.transform.SetParent(holdPoint);
+                // --- PERBAIKAN UTAMA DI SINI ---
+                // Abaikan tabrakan antara collider pemain dan collider objek yang dipegang
+                if (heldCollider != null && playerCollider != null)
+                {
+                    Physics.IgnoreCollision(playerCollider, heldCollider, true);
+                }
             }
         }
     }
 
+    private void MoveObjectWithPhysics()
+    {
+        Vector3 moveDirection = (holdPoint.position - heldRb.position);
+        heldRb.linearVelocity = moveDirection * holdSpeed;
+    }
+
     void ThrowObject()
     {
-        heldObject.transform.SetParent(null);
+        if (heldObject == null) return;
 
-        if (heldRb != null)
+        Rigidbody rbToThrow = heldRb;
+        Collider colToRestore = heldObject.GetComponent<Collider>();
+        Pickupable itemProperties = heldObject.GetComponent<Pickupable>();
+
+        RestoreObjectState(rbToThrow, colToRestore);
+
+        if (rbToThrow != null)
         {
-            heldRb.isKinematic = false;
-            heldRb.useGravity = true;
+            float force = throwForceMultiplier / Mathf.Max(rbToThrow.mass, 0.1f);
 
             Camera cam = Camera.main;
-            Vector3 throwDirection = (cam != null ? cam.transform.forward : transform.forward) + Vector3.up * 0.2f;
-            heldRb.AddForce(throwDirection.normalized * throwForce);
+            Vector3 throwDirection = cam != null ? cam.transform.forward : transform.forward;
 
-            if (heldCollider != null)
-                heldCollider.enabled = true;
+            rbToThrow.AddForce(throwDirection * force, ForceMode.Impulse);
+
+            if (itemProperties != null && itemProperties.shouldSpin)
+            {
+                Vector3 spinAxis = cam != null ? cam.transform.right : transform.right;
+                rbToThrow.AddTorque(spinAxis * itemProperties.spinForce, ForceMode.Impulse);
+            }
+        }
+    }
+
+    void DropObject()
+    {
+        if (heldObject == null) return;
+        RestoreObjectState(heldRb, heldObject.GetComponent<Collider>());
+    }
+
+    private void RestoreObjectState(Rigidbody rbToRestore, Collider colToRestore)
+    {
+        if (rbToRestore != null)
+        {
+            rbToRestore.freezeRotation = false;
+            rbToRestore.collisionDetectionMode = CollisionDetectionMode.Discrete;
+        }
+
+        // --- PERBAIKAN UTAMA DI SINI ---
+        // Aktifkan kembali tabrakan antara pemain dan objek
+        if (colToRestore != null && playerCollider != null)
+        {
+            Physics.IgnoreCollision(playerCollider, colToRestore, false);
         }
 
         heldObject = null;
         heldRb = null;
+    }
+
+    private bool IsHoldingWeapon()
+    {
+        if (weaponHolster != null && weaponHolster.childCount > 0)
+        {
+            foreach (Transform child in weaponHolster)
+            {
+                if (child.gameObject.activeInHierarchy) return true;
+            }
+        }
+        return false;
     }
 }
