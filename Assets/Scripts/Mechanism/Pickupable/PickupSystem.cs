@@ -84,7 +84,7 @@ public class PickupSystem : MonoBehaviour
         heldRb.linearVelocity = moveDirection * holdSpeed;
     }
 
-    void ThrowObject()
+    public void ThrowObject()
     {
         if (heldObject == null) return;
 
