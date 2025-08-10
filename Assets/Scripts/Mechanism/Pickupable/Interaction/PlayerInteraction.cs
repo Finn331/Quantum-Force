@@ -36,6 +36,10 @@ public class PlayerInteraction : MonoBehaviour
             {
                 handle.Interact();
             }
+            else if (hit.collider.TryGetComponent(out Lever lever))
+            {
+                lever.Interact();
+            }
         }
     }
 }
