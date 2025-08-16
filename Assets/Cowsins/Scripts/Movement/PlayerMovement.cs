@@ -91,7 +91,7 @@ namespace cowsins
         private float loseSpeedDeceleration;
 
         [Tooltip("Capacity to gain speed."), SerializeField]
-        private float acceleration = 4500;
+        public float acceleration = 4500;
 
         [Tooltip("Maximum allowed speed.")]
         public float currentSpeed = 20;
@@ -187,7 +187,7 @@ namespace cowsins
         [Range(0, .3f), Tooltip("Coyote jump allows users to perform more satisfactory and responsive jumps, especially when jumping off surfaces")] public float coyoteJumpTime;
 
         [Tooltip("The higher this value is, the higher you will get to jump."), SerializeField]
-        private float jumpForce = 550f;
+        public float jumpForce = 550f;
 
         [Tooltip("Method to apply on jumping when the player is not grounded, related to the directional jump")]
         public DirectionalJumpMethod directionalJumpMethod;
