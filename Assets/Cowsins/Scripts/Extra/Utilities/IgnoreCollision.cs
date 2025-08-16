@@ -18,6 +18,10 @@ namespace cowsins
             {
                 Physics.IgnoreCollision(collision.collider, GetComponent<Collider>());
             }
+            if (collision.transform.CompareTag("Board"))
+            {
+                Physics.IgnoreCollision(collision.collider, GetComponent<Collider>());
+            }
         }
 
     }

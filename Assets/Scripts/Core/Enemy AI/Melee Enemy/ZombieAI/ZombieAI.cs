@@ -308,4 +308,12 @@ public class ZombieAI : MonoBehaviour
     {
         if (hurtSFX != null) SoundManager.Instance.PlaySound(hurtSFX, 0f, 0f, true, 1f);
     }
+
+    private void OnCollisionEnter(Collision collision)
+    {
+        if (collision.gameObject.CompareTag("FallenObject"))
+        {
+            enemyHealth.health = 0;
+        }
+    }
 }

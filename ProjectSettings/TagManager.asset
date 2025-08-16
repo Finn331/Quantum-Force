@@ -13,6 +13,8 @@ TagManager:
   - Ladder
   - Pickupable
   - FallenObject
+  - Board
+  - Wall
   layers:
   - Default
   - TransparentFX
@@ -34,8 +36,8 @@ TagManager:
   - Player
   - Obstacle
   - Drones
-  - 
-  - 
+  - FallenObject
+  - Destructible
   - 
   - 
   - 
