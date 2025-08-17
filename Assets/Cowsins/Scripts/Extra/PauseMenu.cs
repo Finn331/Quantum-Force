@@ -17,9 +17,6 @@ namespace cowsins
 
         public static PauseMenu Instance { get; private set; }
 
-        /// <summary>
-        /// Returns the Pause State of the game
-        /// </summary>
         public static bool isPaused { get; private set; }
 
         [HideInInspector] public PlayerStats stats;
@@ -36,16 +33,22 @@ namespace cowsins
             }
             Instance = this;
 
-            // Initially, the game is not paused
             isPaused = false;
             menu.gameObject.SetActive(false);
             menu.alpha = 0;
+        }
 
+        // --- PERBAIKAN DI SINI ---
+        // OnEnable dipanggil setiap kali script ini diaktifkan
+        private void OnEnable()
+        {
+            // Daftarkan event setiap kali script aktif
             InputManager.onTogglePause += TogglePause;
         }
 
         private void OnDisable()
         {
+            // Batalkan pendaftaran setiap kali script non-aktif
             InputManager.onTogglePause -= TogglePause;
         }
 
@@ -104,6 +107,5 @@ namespace cowsins
         {
             Application.Quit();
         }
-
     }
 }
