@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: Shotgun
   m_EditorClassIdentifier: 
   _name: Shotgun
+  description: 
   icon: {fileID: 21300000, guid: 15745d5342e0447468f077b4299353cd, type: 3}
   pickUpGraphics: {fileID: 2092819957812016947, guid: 5f0b070383feac14d98e11a8628abf20, type: 3}
   maxStack: 1
@@ -188,7 +189,7 @@ MonoBehaviour:
   applyDifferentRecoilOnAiming: 0
   xRecoilAmountOnAiming: 0
   yRecoilAmountOnAiming: 0
-  damagePerBullet: 5
+  damagePerBullet: 10
   applyDamageReductionBasedOnDistance: 0
   minimumDistanceToApplyDamageReduction: 0
   damageReductionMultiplier: 0

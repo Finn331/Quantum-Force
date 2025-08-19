@@ -28,6 +28,8 @@ public class ZombieManager : MonoBehaviour
     public int ZombiesKilled => zombiesKilled;
     public int ZombiesRemaining => allZombies.Count;
 
+    [SerializeField] GameObject piggyfrogManagerGameobject;
+
     void Awake()
     {
         if (Instance == null)
@@ -108,5 +110,17 @@ public class ZombieManager : MonoBehaviour
     {
         Gizmos.color = Color.yellow;
         Gizmos.DrawWireSphere(transform.position, alertRadius);
+    }
+
+    public void DestroySelf()
+    {
+        if (piggyfrogManagerGameobject != null)
+        {
+            Destroy(piggyfrogManagerGameobject);
+        }
+        else
+        {
+            Debug.LogWarning("PiggyfrogManager GameObject tidak ditemukan untuk dihancurkan!");
+        }
     }
 }

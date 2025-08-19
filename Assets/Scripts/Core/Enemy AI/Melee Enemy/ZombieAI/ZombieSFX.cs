@@ -9,4 +9,9 @@ public class ZombieSFX : MonoBehaviour
     {
         zombieAI.PlayRageSFX();
     }
+
+    public void DealDamage()
+    {
+        zombieAI.DealDamage();
+    }
 }

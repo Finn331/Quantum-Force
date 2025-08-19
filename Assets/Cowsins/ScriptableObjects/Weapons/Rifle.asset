@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: Rifle
   m_EditorClassIdentifier: 
   _name: Rifle
+  description: 
   icon: {fileID: 21300000, guid: ef9ea11cceed199429b726e78188145b, type: 3}
   pickUpGraphics: {fileID: 2092819957812016947, guid: e7e3845b234f68b419f5691520f72f04, type: 3}
   maxStack: 1
@@ -152,7 +153,7 @@ MonoBehaviour:
   applyDifferentRecoilOnAiming: 0
   xRecoilAmountOnAiming: 0
   yRecoilAmountOnAiming: 0
-  damagePerBullet: 2.8
+  damagePerBullet: 15
   applyDamageReductionBasedOnDistance: 0
   minimumDistanceToApplyDamageReduction: 0
   damageReductionMultiplier: 0

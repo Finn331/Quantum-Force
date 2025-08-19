@@ -120,6 +120,7 @@ MonoBehaviour:
   lodAnimator: {fileID: 2386438785407711142}
   agent: {fileID: 7664489072720170354}
   target: {fileID: 0}
+  meleeDamage: 0
   waypoints:
   - {fileID: 0}
   - {fileID: 0}
@@ -151,7 +152,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5890fdf64f390414bb1e5dbe4986e4aa, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  uniqueID: 448f3972-9032-4ffa-b7dc-53312ed75f8f
+  uniqueID: de32f545-d37b-40a5-9e34-21b0de9b5015
   _name: Piggyfrog
   health: 0
   shield: 0

@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: Pistol
   m_EditorClassIdentifier: 
   _name: Pistol
+  description: 
   icon: {fileID: 21300000, guid: 243d28a3ac1a4914da8cea587a10bf36, type: 3}
   pickUpGraphics: {fileID: 2092819957812016947, guid: 648b96c7695310045ab6523fd4a2ed5c, type: 3}
   maxStack: 1
@@ -134,7 +135,7 @@ MonoBehaviour:
   applyDifferentRecoilOnAiming: 1
   xRecoilAmountOnAiming: 40
   yRecoilAmountOnAiming: 2
-  damagePerBullet: 2
+  damagePerBullet: 10
   applyDamageReductionBasedOnDistance: 0
   minimumDistanceToApplyDamageReduction: 40.3
   damageReductionMultiplier: 1

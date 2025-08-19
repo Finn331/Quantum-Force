@@ -12,6 +12,7 @@ public class ZombieAI : MonoBehaviour
     [Header("AI Components")]
     public NavMeshAgent agent;
     public Transform target;
+    public float meleeDamage; // Atur nilai damage di Inspector
 
     [Header("Wandering")]
     public List<Transform> waypoints;
@@ -48,7 +49,6 @@ public class ZombieAI : MonoBehaviour
     [SerializeField] AudioClip dieSFX;
     [SerializeField] AudioClip hurtSFX;
 
-    // Variabel untuk cooldown SFX
     private float lastRageSfxTime = -1f;
 
     void Start()
@@ -117,20 +117,16 @@ public class ZombieAI : MonoBehaviour
     private void HandleDeath()
     {
         hasDied = true;
-
         SetAnimBool("isIdle", false);
         SetAnimBool("isWalking", false);
         SetAnimBool("isRunning", false);
         SetAnimBool("isDead", true);
-
         DieSFX();
-
         if (agent.enabled)
         {
             agent.isStopped = true;
             agent.enabled = false;
         }
-
         GetComponent<Collider>().enabled = false;
         ZombieManager.Instance?.UnregisterZombie(this);
     }
@@ -155,6 +151,7 @@ public class ZombieAI : MonoBehaviour
             HandleChase();
         }
     }
+
     private void HandleWanderingState()
     {
         SetAnimBool("isRunning", false);
@@ -197,6 +194,7 @@ public class ZombieAI : MonoBehaviour
             }
         }
     }
+
     private void HandleAttack()
     {
         agent.isStopped = true;
@@ -210,6 +208,7 @@ public class ZombieAI : MonoBehaviour
             nextAttackTime = Time.time + attackCooldown;
         }
     }
+
     private void HandleChase()
     {
         agent.isStopped = false;
@@ -272,6 +271,7 @@ public class ZombieAI : MonoBehaviour
             if (lodAnimator != null) lodAnimator.SetTrigger("attack");
         }
     }
+
     private bool HasLineOfSightToPlayer()
     {
         if (target == null) return false;
@@ -287,17 +287,11 @@ public class ZombieAI : MonoBehaviour
         return true;
     }
 
-    void OnDestroy()
-    {
-        // Dikosongkan karena unregister sudah dipindah ke HandleDeath()
-    }
-
     // --- SFX HANDLER ---
     public void PlayRageSFX()
     {
         if (Time.time - lastRageSfxTime < 0.1f) return;
         lastRageSfxTime = Time.time;
-
         if (rageSFX != null) SoundManager.Instance.PlaySound(rageSFX, 0, 0, true, 0);
     }
     void DieSFX()
@@ -314,6 +308,24 @@ public class ZombieAI : MonoBehaviour
         if (collision.gameObject.CompareTag("FallenObject"))
         {
             enemyHealth.health = 0;
+        }
+    }
+
+    // --- FUNGSI BARU UNTUK MEMBERI DAMAGE ---
+    // Panggil fungsi ini dari Animation Event pada klip animasi serangan Anda
+    public void DealDamage()
+    {
+        // Cek jika target masih dalam jangkauan saat animasi serangan mengenai
+        if (target != null && Vector3.Distance(transform.position, target.position) <= attackRange)
+        {
+            // Coba dapatkan komponen kesehatan pemain (ganti 'PlayerStats' jika perlu)
+            PlayerStats playerStats = target.GetComponent<PlayerStats>();
+            if (playerStats != null)
+            {
+                // Berikan damage ke pemain
+                playerStats.Damage(meleeDamage, false);
+                Debug.Log(gameObject.name + " menyerang pemain sebesar " + meleeDamage + " damage!");
+            }
         }
     }
 }

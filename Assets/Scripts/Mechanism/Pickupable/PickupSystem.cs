@@ -13,6 +13,8 @@ public class PickupSystem : MonoBehaviour
 
     [Header("Weapon Check")]
     public Transform weaponHolster;
+    [SerializeField] GameObject handFullUI;
+    [SerializeField] GameObject handFullText;
 
     private GameObject heldObject;
     private Rigidbody heldRb;
@@ -48,6 +50,14 @@ public class PickupSystem : MonoBehaviour
         if (IsHoldingWeapon())
         {
             Debug.Log("Cannot pick up object while holding a weapon.");
+            handFullUI.SetActive(true);
+            LeanTween.scale(handFullUI, new Vector3(1.5f, 1.5f, 1.5f), 2f).setEase(LeanTweenType.easeOutBounce).setOnComplete(() =>
+            {
+                LeanTween.scale(handFullUI, Vector3.one, 1.5f).setEase(LeanTweenType.easeInBounce).setOnComplete(() =>
+                {
+                    handFullUI.SetActive(false);                   
+                });
+            });
             return;
         }
 
