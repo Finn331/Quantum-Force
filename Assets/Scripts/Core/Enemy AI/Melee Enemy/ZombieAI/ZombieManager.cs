@@ -1,12 +1,12 @@
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Events; // Tambahkan ini untuk menggunakan UnityEvent
+using UnityEngine.Events; // Pastikan ini ada
+using System.Collections; // Diperlukan untuk Coroutine
 
 public class ZombieManager : MonoBehaviour
 {
-    public static ZombieManager Instance;
+    //public static ZombieManager Instance;
 
-    // Pastikan Anda mengisi list ini dari Inspector sebelum memulai game
     [SerializeField] private List<ZombieAI> allZombies = new List<ZombieAI>();
 
     [Header("Alert Settings")]
@@ -14,44 +14,42 @@ public class ZombieManager : MonoBehaviour
     [SerializeField] private int maxAlertCount = 4;
 
     [Header("Zombie Tracking")]
-    // Variabel untuk melacak jumlah zombie
     private int initialZombieCount;
     [SerializeField] int zombiesKilled = 0;
 
     [Header("Custom Events")]
-    public int killCountForEvent = 5; // Jumlah kill yang dibutuhkan untuk event pertama
-    public UnityEvent onKillCountReached; // Event yang dipicu saat kill mencapai 'killCountForEvent'
-    public UnityEvent onAllZombiesKilled; // Event yang dipicu saat semua zombie mati
+    public int killCountForEvent = 5;
+    public UnityEvent onKillCountReached;
+    public UnityEvent onAllZombiesKilled;
 
-    // Properti publik agar skrip lain bisa membaca data ini dengan aman
+    [Header("Destruction Settings")]
+    [Tooltip("Objek yang akan dihancurkan saat event dipicu.")]
+    [SerializeField] GameObject piggyfrogManagerGameobject;
+    [Tooltip("Waktu jeda sebelum objek dihancurkan (dalam detik).")]
+    [SerializeField] float destructionDelay = 3.0f; // Variabel baru untuk jeda
+
     public int InitialZombieCount => initialZombieCount;
     public int ZombiesKilled => zombiesKilled;
     public int ZombiesRemaining => allZombies.Count;
 
-    [SerializeField] GameObject piggyfrogManagerGameobject;
-
     void Awake()
     {
-        if (Instance == null)
-            Instance = this;
-        else
-            Destroy(gameObject);
+        //if (Instance == null)
+        //    Instance = this;
+        //else
+        //    Destroy(gameObject);
     }
 
     void Start()
     {
-        // Catat jumlah zombie awal berdasarkan yang ada di list
         initialZombieCount = allZombies.Count;
     }
 
-    // Fungsi ini tidak lagi diperlukan jika Anda mengisi list dari Inspector,
-    // tapi biarkan saja jika Anda ingin menambah zombie saat runtime.
     public void RegisterZombie(ZombieAI zombie)
     {
         if (!allZombies.Contains(zombie))
         {
             allZombies.Add(zombie);
-            // Update jumlah awal jika ada zombie yang mendaftar saat runtime
             initialZombieCount = allZombies.Count;
         }
     }
@@ -61,25 +59,20 @@ public class ZombieManager : MonoBehaviour
         if (allZombies.Contains(zombie))
         {
             allZombies.Remove(zombie);
-            zombiesKilled++; // Tambah hitungan zombie yang mati
-
+            zombiesKilled++;
             Debug.Log("Zombie mati! Total mati: " + zombiesKilled);
-
-            // Cek apakah ada event yang perlu dipicu
             CheckForEvents();
         }
     }
 
     private void CheckForEvents()
     {
-        // Cek apakah jumlah kill sudah mencapai target untuk event pertama
         if (zombiesKilled == killCountForEvent)
         {
             Debug.Log(killCountForEvent + " zombie telah dikalahkan! Memicu event...");
             onKillCountReached.Invoke();
         }
 
-        // Cek apakah semua zombie sudah dikalahkan
         if (allZombies.Count == 0)
         {
             Debug.Log("Semua zombie telah dikalahkan! Memicu event terakhir...");
@@ -112,10 +105,25 @@ public class ZombieManager : MonoBehaviour
         Gizmos.DrawWireSphere(transform.position, alertRadius);
     }
 
+    // --- FUNGSI DIPERBAIKI ---
+    // Fungsi ini yang Anda panggil dari UnityEvent
     public void DestroySelf()
     {
+        // Memulai Coroutine dengan jeda waktu yang sudah ditentukan
+        StartCoroutine(DestroyAfterDelay(destructionDelay));
+    }
+
+    // Coroutine yang menangani jeda waktu
+    private IEnumerator DestroyAfterDelay(float delay)
+    {
+        Debug.Log("Penghancuran akan dimulai dalam " + delay + " detik...");
+        // Tunggu selama 'delay' detik
+        yield return new WaitForSeconds(delay);
+
+        // Setelah menunggu, baru hancurkan objeknya
         if (piggyfrogManagerGameobject != null)
         {
+            Debug.Log("Menghancurkan " + piggyfrogManagerGameobject.name);
             Destroy(piggyfrogManagerGameobject);
         }
         else

@@ -41,7 +41,7 @@ MonoBehaviour:
   reloadTime: 3
   coolSpeed: 1
   cooledPercentageAfterOverheat: 0
-  infiniteBullets: 0
+  infiniteBullets: 1
   magazineSize: 4
   bulletsPerFire: 8
   ammoCostPerFire: 1
@@ -194,8 +194,8 @@ MonoBehaviour:
   minimumDistanceToApplyDamageReduction: 0
   damageReductionMultiplier: 0
   criticalDamageMultiplier: 1.5
-  limitedMagazines: 0
-  totalMagazines: 1
+  limitedMagazines: 1
+  totalMagazines: 10
   showBulletShells: 1
   bulletHoleImpact:
     defaultImpact: {fileID: 2462405574108921655, guid: e6d36bb0ebdf6cc4dacdeee8b6e8a0ce, type: 3}

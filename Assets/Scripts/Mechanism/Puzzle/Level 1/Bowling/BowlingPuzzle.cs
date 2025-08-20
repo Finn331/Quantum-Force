@@ -12,6 +12,9 @@ public class BowlingPuzzle : MonoBehaviour
     [SerializeField] float moveYPos;
     [SerializeField] AudioClip triggerSFX;
 
+    [Header("Script Reference")]
+    [SerializeField] Crate crate;
+
     // Script Reference
     private BowlingPuzzle bowlingPuzzle;
 
@@ -40,6 +43,8 @@ public class BowlingPuzzle : MonoBehaviour
         {
             // 1. Tandai puzzle sebagai selesai agar kode ini tidak berjalan lagi
             isGoalSet = true;
+
+            crate.Die();
 
             GameObject bowlingBall = other.gameObject;
             Rigidbody ballRb = bowlingBall.GetComponent<Rigidbody>();

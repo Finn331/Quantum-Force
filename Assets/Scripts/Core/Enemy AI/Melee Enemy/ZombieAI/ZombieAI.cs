@@ -49,6 +49,9 @@ public class ZombieAI : MonoBehaviour
     [SerializeField] AudioClip dieSFX;
     [SerializeField] AudioClip hurtSFX;
 
+    [Header("Script References")]
+    [SerializeField] ZombieManager zombieManager;
+
     private float lastRageSfxTime = -1f;
 
     void Start()
@@ -57,7 +60,7 @@ public class ZombieAI : MonoBehaviour
         if (agent == null) agent = GetComponent<NavMeshAgent>();
         if (target == null) target = GameObject.FindGameObjectWithTag("Player")?.transform;
 
-        ZombieManager.Instance?.RegisterZombie(this);
+        //ZombieManager.Instance?.RegisterZombie(this);
 
         if (waypoints != null && waypoints.Count > 0)
         {
@@ -94,7 +97,14 @@ public class ZombieAI : MonoBehaviour
             if (isDamaged)
             {
                 isProvoked = true;
-                ZombieManager.Instance?.AlertNearbyZombies(transform.position);
+                if (zombieManager != null)
+                {
+                    zombieManager.AlertNearbyZombies(transform.position);
+                }
+                else
+                {
+                    Debug.LogWarning("ZombieManager is not assigned in ZombieAI script on " + gameObject.name);
+                }
             }
             else if (distanceToPlayer <= chaseRange && HasLineOfSightToPlayer())
             {
@@ -128,7 +138,15 @@ public class ZombieAI : MonoBehaviour
             agent.enabled = false;
         }
         GetComponent<Collider>().enabled = false;
-        ZombieManager.Instance?.UnregisterZombie(this);
+
+        if (zombieManager != null)
+        {
+            zombieManager.UnregisterZombie(this);
+        }
+        else
+        {
+            Debug.LogWarning("ZombieManager is not assigned in ZombieAI script on " + gameObject.name);
+        }
     }
 
     private void HandleProvokedState(float distanceToPlayer)
@@ -223,7 +241,15 @@ public class ZombieAI : MonoBehaviour
         if (isProvoked) return;
         isProvoked = true;
         StartRage();
-        ZombieManager.Instance?.AlertNearbyZombies(transform.position);
+
+        if (zombieManager != null)
+        {
+            zombieManager.AlertNearbyZombies(transform.position);
+        }
+        else
+        {
+            Debug.LogWarning("ZombieManager is not assigned in ZombieAI script on " + gameObject.name);
+        }
     }
 
     public void StartRage()

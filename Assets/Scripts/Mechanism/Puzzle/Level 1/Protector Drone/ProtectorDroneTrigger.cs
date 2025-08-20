@@ -2,24 +2,15 @@ using UnityEngine;
 
 public class ProtectorDroneTrigger : MonoBehaviour
 {
-    private ProtectorDrone protectorDrone;
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
-    void Start()
-    {
-        protectorDrone = GetComponentInParent<ProtectorDrone>();
-    }
+    [Header("Protector Drone Setting")]
+    [SerializeField] GameObject protectorDrone;
+    [SerializeField] float posY;
 
-    // Update is called once per frame
-    void Update()
-    {
-        
-    }
-
-    public void EnableScript()
+    public void MoveUp()
     {
         if (protectorDrone != null)
         {
-            protectorDrone.enabled = true;
+            LeanTween.move(protectorDrone, new Vector3(39.84f, posY, -5.432948f), 1f).setEase(LeanTweenType.easeInOutQuad);
         }
         else
         {

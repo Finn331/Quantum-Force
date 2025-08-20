@@ -140,6 +140,7 @@ MonoBehaviour:
   rageSFX: {fileID: 8300000, guid: 3824f0bfed056b34199b5c3fd44f7b98, type: 3}
   dieSFX: {fileID: 8300000, guid: 72b819f5e417d004e92f1401414d8222, type: 3}
   hurtSFX: {fileID: 8300000, guid: 83442e794c1ded440ac5c5f655a50e48, type: 3}
+  zombieManager: {fileID: 0}
 --- !u!114 &3150314685095111231
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -152,7 +153,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5890fdf64f390414bb1e5dbe4986e4aa, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  uniqueID: de32f545-d37b-40a5-9e34-21b0de9b5015
+  uniqueID: 69b53db0-e030-42a5-bdac-b46fd345c845
   _name: Piggyfrog
   health: 0
   shield: 0

@@ -16,16 +16,11 @@ public class RoomIdentifier : MonoBehaviour
     [Tooltip("Waktu jeda agar pemain bisa membaca teks (dalam detik).")]
     [SerializeField] float readTime = 2.5f;
 
-    // Variabel baru untuk menyimpan CanvasGroup
     private CanvasGroup descriptionCanvasGroup;
-
     [SerializeField] GameObject triggerGameobject;
 
     private void Awake()
     {
-        // --- PERBAIKAN UTAMA ---
-        // Siapkan CanvasGroup pada descriptionTextUI.
-        // Ini adalah cara terbaik untuk mengontrol alpha UI.
         if (descriptionTextUI != null)
         {
             descriptionCanvasGroup = descriptionTextUI.GetComponent<CanvasGroup>();
@@ -38,9 +33,9 @@ public class RoomIdentifier : MonoBehaviour
 
     void Start()
     {
+        // We no longer set the text here.
+        // We only ensure the panel is hidden at the start.
         if (panelTextIdentifier != null) panelTextIdentifier.SetActive(false);
-        if (roomNameTextUI != null) roomNameTextUI.text = roomName;
-        if (descriptionTextUI != null) descriptionTextUI.text = descriptionText;
     }
 
     private void OnTriggerEnter(Collider other)
@@ -48,43 +43,46 @@ public class RoomIdentifier : MonoBehaviour
         if (other.CompareTag("Player"))
         {
             ShowText();
-            Destroy(triggerGameobject); // Hapus trigger setelah digunakan
+            if (triggerGameobject != null)
+            {
+                Destroy(triggerGameobject); // Destroy the trigger after use
+            }
+            else
+            {
+                Destroy(gameObject); // Fallback to destroying this object
+            }
         }
     }
 
     public void ShowText()
-    {        
+    {
+        // --- PERBAIKAN UTAMA DI SINI ---
+        // 1. Set the text content RIGHT NOW, using this trigger's specific text.
+        if (roomNameTextUI != null) roomNameTextUI.text = roomName;
+        if (descriptionTextUI != null) descriptionTextUI.text = descriptionText;
+
+        // Stop any previous animations to prevent overlap
         if (roomNameTextUI != null) LeanTween.cancel(roomNameTextUI.gameObject);
         if (descriptionCanvasGroup != null) LeanTween.cancel(descriptionCanvasGroup.gameObject);
 
-        // 1. Persiapan Awal
+        // 2. Prepare the UI for animation
         if (panelTextIdentifier != null) panelTextIdentifier.SetActive(true);
         if (roomNameTextUI != null) roomNameTextUI.gameObject.SetActive(true);
         if (descriptionTextUI != null) descriptionTextUI.gameObject.SetActive(true);
 
         roomNameTextUI.transform.localScale = Vector3.zero;
-
-        // Atur alpha awal melalui CanvasGroup
         if (descriptionCanvasGroup != null) descriptionCanvasGroup.alpha = 0f;
 
-        // 2. Buat Urutan Animasi (Sequence)
+        // 3. Create the animation sequence
         LeanTween.sequence()
             .append(LeanTween.scale(roomNameTextUI.gameObject, Vector3.one, 0.5f).setEase(LeanTweenType.easeOutBack))
-
-            // --- PERBAIKAN DI SINI ---
-            // Gunakan LeanTween.alphaCanvas() untuk fade in
             .append(LeanTween.alphaCanvas(descriptionCanvasGroup, 1f, 0.5f).setEase(LeanTweenType.easeInOutSine))
-
             .append(readTime)
-
             .append(() => {
                 LeanTween.scale(roomNameTextUI.gameObject, Vector3.zero, 0.5f).setEase(LeanTweenType.easeInBack);
-                // Gunakan LeanTween.alphaCanvas() untuk fade out
                 LeanTween.alphaCanvas(descriptionCanvasGroup, 0f, 0.5f).setEase(LeanTweenType.easeInOutSine);
             })
-
             .append(0.5f)
-
             .append(() => {
                 if (panelTextIdentifier != null) panelTextIdentifier.SetActive(false);
             });
