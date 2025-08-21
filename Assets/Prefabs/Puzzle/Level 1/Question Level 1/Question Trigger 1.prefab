@@ -108,7 +108,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: daf2d590ebbc0d344a161bf10dd0c2de, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  uniqueID: b2c20781-6e41-42bd-964a-22ae6ce16e5d
+  uniqueID: 360261ab-215e-4514-a980-1ac0206965d9
   interactable: 0
   interactText: PRESS E TO INTERACT
   instantInteraction: 0
@@ -148,3 +148,9 @@ MonoBehaviour:
   playerMovement: {fileID: 0}
   pauseMenu: {fileID: 0}
   crosshair: {fileID: 0}
+  onRightAnswer:
+    m_PersistentCalls:
+      m_Calls: []
+  onWrongAnswer:
+    m_PersistentCalls:
+      m_Calls: []

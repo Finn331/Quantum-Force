@@ -1,20 +1,27 @@
 using cowsins;
 using TMPro;
 using UnityEngine;
+using UnityEngine.Events;
 
 public class QuestionTrigger : MonoBehaviour
 {
     [Header("Question Settings")]
-    [SerializeField] GameObject questionPanel;
-    [SerializeField] AudioClip panelOpenSFX;
-    [SerializeField] GameObject rightOrWrongTextPanel;
-    [SerializeField] GameObject rightAnswerText;
-    [SerializeField] GameObject wrongAnswerText;
+    [SerializeField] private GameObject questionPanel;
+    [SerializeField] private AudioClip panelOpenSFX;
+    [SerializeField] private GameObject rightOrWrongTextPanel;
+    [SerializeField] private GameObject rightAnswerText;
+    [SerializeField] private GameObject wrongAnswerText;
 
     [Header("Player Reference")]
-    [SerializeField] PlayerMovement playerMovement;
-    [SerializeField] PauseMenu pauseMenu;
-    [SerializeField] GameObject crosshair;
+    [SerializeField] private PlayerMovement playerMovement;
+    [SerializeField] private PauseMenu pauseMenu;
+    [SerializeField] private GameObject crosshair;
+
+    [Header("Custom Events")]
+    [Tooltip("Dipanggil ketika jawaban benar.")]
+    [SerializeField] private UnityEvent onRightAnswer;
+    [Tooltip("Dipanggil ketika jawaban salah.")]
+    [SerializeField] private UnityEvent onWrongAnswer;
 
     // PlayerMovement Settings
     private float originalWalkSpeed = 5f;
@@ -71,6 +78,10 @@ public class QuestionTrigger : MonoBehaviour
     {
         rightOrWrongTextPanel.SetActive(true);
         rightAnswerText.SetActive(true);
+
+        // panggil event untuk jawaban benar
+        onRightAnswer?.Invoke();
+
         LeanTween.scale(rightAnswerText, new Vector3(5.1102f, 5.1102f, 5.1102f), 1).setEase(LeanTweenType.easeOutSine).setOnComplete(() =>
         {
             CloseQuestion();
@@ -84,6 +95,10 @@ public class QuestionTrigger : MonoBehaviour
     {
         rightOrWrongTextPanel.SetActive(true);
         wrongAnswerText.SetActive(true);
+
+        // panggil event untuk jawaban salah
+        onWrongAnswer?.Invoke();
+
         LeanTween.scale(wrongAnswerText, new Vector3(5.1102f, 5.1102f, 5.1102f), 1f).setEase(LeanTweenType.easeOutSine).setOnComplete(() =>
         {
             CloseQuestion();

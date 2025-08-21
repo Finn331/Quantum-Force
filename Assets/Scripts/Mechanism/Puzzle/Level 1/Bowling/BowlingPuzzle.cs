@@ -1,76 +1,90 @@
-using cowsins;
+﻿using cowsins;
 using UnityEngine;
+using UnityEngine.Events;
 
 public class BowlingPuzzle : MonoBehaviour
 {
     [Header("Bowling Setting")]
-    [SerializeField] Transform goalPos;
-    [SerializeField] bool isGoalSet = false;
+    [SerializeField] private Transform goalPos;
+    [SerializeField] private bool isGoalSet = false;
 
     [Header("Goals Setting")]
-    [SerializeField] GameObject bridge;
-    [SerializeField] float moveYPos;
-    [SerializeField] AudioClip triggerSFX;
+    [SerializeField] private GameObject bridge;
+    [SerializeField] private float moveYPos = 0f;
+    [SerializeField] private AudioClip triggerSFX;
 
     [Header("Script Reference")]
-    [SerializeField] Crate crate;
+    [SerializeField] private Crate crate;
+
+    [Header("Custom Events")]
+    [Tooltip("Dipanggil sekali saat goal tercapai (bola valid masuk ke trigger).")]
+    [SerializeField] private UnityEvent onGoalSet;
 
     // Script Reference
     private BowlingPuzzle bowlingPuzzle;
 
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
         bowlingPuzzle = this.GetComponent<BowlingPuzzle>();
     }
 
-    // Update is called once per frame
     void Update()
     {
-        if (isGoalSet == true)
+        // (Opsional) Jika ingin animasi di-update ketika sudah goal sebelum script di-disable.
+        if (isGoalSet)
         {
-            LeanTween.moveY(bridge, moveYPos, 1f).setEaseInOutSine().setOnComplete(() =>
-            {
-                Debug.Log("Bridge moved up!");
-            });
+            // Pastikan hanya satu tween yang jalan pada frame pertama setelah isGoalSet = true
+            // (Aman karena script akan di-disable di OnTriggerStay setelah tween utama)
+            LeanTween.moveY(bridge, moveYPos, 1f)
+                     .setEaseInOutSine()
+                     .setOnComplete(() =>
+                     {
+                         Debug.Log("Bridge moved up!");
+                     });
         }
     }
 
     private void OnTriggerStay(Collider other)
     {
-        
         if (!isGoalSet && other.gameObject.CompareTag("Pickupable"))
         {
-            // 1. Tandai puzzle sebagai selesai agar kode ini tidak berjalan lagi
+            // 1) Lock supaya hanya sekali
             isGoalSet = true;
 
-            crate.Die();
+            // 2) Hancurkan/crate selesai (sesuai logic kamu)
+            if (crate != null) crate.Die();
 
+            // 3) Bekukan bola
             GameObject bowlingBall = other.gameObject;
             Rigidbody ballRb = bowlingBall.GetComponent<Rigidbody>();
-
-            // 2. Matikan fisika bola agar berhenti total (stuck)
             if (ballRb != null)
             {
                 ballRb.isKinematic = true;
-                
+                ballRb.linearVelocity = Vector3.zero;   // Unity 6 / Netcode
+                ballRb.angularVelocity = Vector3.zero;
+                // Jika pakai Unity versi lama:
+                // ballRb.velocity = Vector3.zero;
+                // ballRb.angularVelocity = Vector3.zero;
             }
 
-            // 3. Posisikan bola tepat di tengah objek trigger ini
+            // 4) Posisikan & parent ke trigger
             bowlingBall.transform.position = this.transform.position;
+            bowlingBall.transform.SetParent(this.transform, true);
 
-            // 4. Jadikan bola sebagai child dari objek ini
-            bowlingBall.transform.SetParent(this.transform);
+            // 5) Jalankan animasi jembatan sekali
+            LeanTween.moveY(bridge, moveYPos, 1.38f)
+                     .setEaseInOutSine()
+                     .setOnComplete(() =>
+                     {
+                         Debug.Log("Goal reached! Bridge moved up!");
+                         bowlingPuzzle.enabled = false; // stop update & cegah trigger ulang
+                     });
 
-            // 5. Jalankan animasi jembatan HANYA SEKALI
-            LeanTween.moveY(bridge, moveYPos, 1.38f).setEaseInOutSine().setOnComplete(() =>
-            {
-                Debug.Log("Goal reached! Bridge moved up!");
-                bowlingPuzzle.enabled = false; // Disable the script to prevent further updates
-            });
+            // 6) SFX
+            SoundManager.Instance?.PlaySound(triggerSFX, 0f, 0f, false, 1f);
 
-            //6. Mainkan efek suara
-            SoundManager.Instance.PlaySound(triggerSFX, 0f, 0f, false, 1f);
+            // 7) Panggil event kustom untuk dipasang via Inspector
+            onGoalSet?.Invoke();
         }
     }
 }

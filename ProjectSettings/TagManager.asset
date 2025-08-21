@@ -15,6 +15,7 @@ TagManager:
   - FallenObject
   - Board
   - Wall
+  - Void
   layers:
   - Default
   - TransparentFX
@@ -38,7 +39,7 @@ TagManager:
   - Drones
   - FallenObject
   - Destructible
-  - 
+  - Void
   - 
   - 
   - 
