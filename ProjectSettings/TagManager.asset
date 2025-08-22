@@ -16,6 +16,7 @@ TagManager:
   - Board
   - Wall
   - Void
+  - Ball
   layers:
   - Default
   - TransparentFX

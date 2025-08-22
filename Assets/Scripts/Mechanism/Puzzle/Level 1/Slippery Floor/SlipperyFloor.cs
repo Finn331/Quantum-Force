@@ -2,11 +2,12 @@ using UnityEngine;
 
 public class SlipperyFloor : MonoBehaviour
 {
+    [SerializeField] string tagName;
     public float slipForce = 5f;
 
     void OnTriggerStay(Collider other)
     {
-        if (other.CompareTag("Pickupable"))
+        if (other.CompareTag(tagName))
         {
             Rigidbody rb = other.GetComponent<Rigidbody>();
             if (rb != null)

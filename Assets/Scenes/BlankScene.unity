@@ -4782,6 +4782,7 @@ MonoBehaviour:
   lodAnimator: {fileID: 1241282056}
   agent: {fileID: 1299394608}
   target: {fileID: 4612824604253905126}
+  meleeDamage: 0
   waypoints:
   - {fileID: 1664047993}
   - {fileID: 924603553}
@@ -4801,6 +4802,7 @@ MonoBehaviour:
   rageSFX: {fileID: 8300000, guid: 3824f0bfed056b34199b5c3fd44f7b98, type: 3}
   dieSFX: {fileID: 8300000, guid: 72b819f5e417d004e92f1401414d8222, type: 3}
   hurtSFX: {fileID: 8300000, guid: 83442e794c1ded440ac5c5f655a50e48, type: 3}
+  zombieManager: {fileID: 0}
 --- !u!114 &1299394607
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5386,6 +5388,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   buttons: []
+  autoFindButtons: 0
   onPuzzleSolved:
     m_PersistentCalls:
       m_Calls: []
@@ -11824,16 +11827,28 @@ PrefabInstance:
     m_TransformParent: {fileID: 0}
     m_Modifications:
     - target: {fileID: 1541439692745921280, guid: 4106ea6790fb96147afa00a9091cae11, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 1.9016
+      objectReference: {fileID: 0}
+    - target: {fileID: 1541439692745921280, guid: 4106ea6790fb96147afa00a9091cae11, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 1.9016
+      objectReference: {fileID: 0}
+    - target: {fileID: 1541439692745921280, guid: 4106ea6790fb96147afa00a9091cae11, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 1.9016
+      objectReference: {fileID: 0}
+    - target: {fileID: 1541439692745921280, guid: 4106ea6790fb96147afa00a9091cae11, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 23.070318
+      value: 23.07
       objectReference: {fileID: 0}
     - target: {fileID: 1541439692745921280, guid: 4106ea6790fb96147afa00a9091cae11, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0.6458337
+      value: 0.55771
       objectReference: {fileID: 0}
     - target: {fileID: 1541439692745921280, guid: 4106ea6790fb96147afa00a9091cae11, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 20.801043
+      value: 20.799
       objectReference: {fileID: 0}
     - target: {fileID: 1541439692745921280, guid: 4106ea6790fb96147afa00a9091cae11, type: 3}
       propertyPath: m_LocalRotation.w

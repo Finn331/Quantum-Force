@@ -1,99 +1,119 @@
 using UnityEngine;
 using UnityEngine.Events;
+using System.Collections.Generic;
+
+[System.Serializable]
+public class BoolEvent : UnityEvent<bool> { } // agar bisa on/off di Inspector
 
 public class WeightButton : MonoBehaviour
 {
     [Header("Settings")]
-    [Tooltip("Berat (Mass) yang dibutuhkan untuk mengaktifkan tombol ini (dalam kg).")]
-    public float requiredMass;
-    [Tooltip("Referensi ke objek visual bagian atas tombol yang akan bergerak.")]
+    [Tooltip("Berat (Mass) minimum yang dibutuhkan untuk mengaktifkan tombol ini (kg).")]
+    public float requiredMass = 5f;
+
+    [Tooltip("Bagian atas tombol yang bergerak naik/turun.")]
     public Transform buttonTop;
-    [Tooltip("Seberapa dalam tombol akan turun saat ditekan (dalam meter).")]
+
+    [Tooltip("Seberapa dalam tombol akan turun saat ditekan (meter).")]
     public float pressDepth = 0.1f;
-    [Tooltip("Kecepatan animasi tombol turun/naik.")]
+
+    [Tooltip("Durasi animasi tombol turun/naik (detik).")]
     public float pressSpeed = 0.3f;
 
     [Header("Events")]
-    [Tooltip("Event yang dipicu saat tombol ditekan dengan benar.")]
+    [Tooltip("Dipicu saat tombol pertama kali memenuhi massa.")]
     public UnityEvent onPressed;
-    [Tooltip("Event yang dipicu saat objek diangkat dari tombol.")]
+    [Tooltip("Dipicu saat massa turun di bawah syarat.")]
     public UnityEvent onReleased;
+    [Tooltip("Dipicu tiap status berubah: true=pressed, false=released.")]
+    public BoolEvent onPressStateChanged;
+
+    [Header("Notify Managers")]
+    [Tooltip("Manager yang harus dicek ulang ketika status tombol ini berubah.")]
+    public WeightPuzzleManager[] managers;
 
     private Vector3 topStartPosition;
     private bool isPressed = false;
+    private readonly List<Rigidbody> objectsOnButton = new List<Rigidbody>();
 
-    // Properti agar Manager bisa tahu status tombol ini
     public bool IsPressed => isPressed;
 
     private void Start()
     {
         if (buttonTop != null)
-        {
-            // Simpan posisi awal dari bagian atas tombol
             topStartPosition = buttonTop.localPosition;
-        }
     }
 
     private void OnTriggerEnter(Collider other)
     {
-        // Cek jika objek yang masuk punya tag "Pickupable" dan belum ditekan
-        if (other.CompareTag("Pickupable") && !isPressed)
+        if (!other.CompareTag("Pickupable")) return;
+
+        var rb = other.attachedRigidbody;
+        if (rb != null && !objectsOnButton.Contains(rb))
         {
-            // Coba dapatkan komponen Rigidbody dari objek
-            Rigidbody rb = other.GetComponent<Rigidbody>();
-            if (rb != null)
-            {
-                // Cek apakah mass-nya sesuai (gunakan Mathf.Approximately untuk perbandingan float)
-                if (Mathf.Approximately(rb.mass, requiredMass))
-                {
-                    PressButton();
-                }
-            }
+            objectsOnButton.Add(rb);
+            CheckWeight();
         }
     }
 
     private void OnTriggerExit(Collider other)
     {
-        // Cek jika objek yang keluar punya tag "Pickupable" dan tombol sedang ditekan
-        if (other.CompareTag("Pickupable") && isPressed)
+        if (!other.CompareTag("Pickupable")) return;
+
+        var rb = other.attachedRigidbody;
+        if (rb != null && objectsOnButton.Contains(rb))
         {
-            Rigidbody rb = other.GetComponent<Rigidbody>();
-            if (rb != null && Mathf.Approximately(rb.mass, requiredMass))
-            {
-                ReleaseButton();
-            }
+            objectsOnButton.Remove(rb);
+            CheckWeight();
         }
+    }
+
+    private void CheckWeight()
+    {
+        float totalMass = 0f;
+        for (int i = objectsOnButton.Count - 1; i >= 0; i--)
+        {
+            if (objectsOnButton[i] == null) { objectsOnButton.RemoveAt(i); continue; }
+            totalMass += objectsOnButton[i].mass;
+        }
+
+        if (totalMass >= requiredMass && !isPressed)
+        {
+            PressButton();
+        }
+        else if (totalMass < requiredMass && isPressed)
+        {
+            ReleaseButton();
+        }
+        // jika status tidak berubah, tidak ada notifikasi
     }
 
     private void PressButton()
     {
         isPressed = true;
-        Debug.Log("Tombol untuk " + requiredMass + "kg DITEKAN.");
-
-        // Animasikan tombol turun menggunakan LeanTween
         if (buttonTop != null)
-        {
-            LeanTween.moveLocalY(buttonTop.gameObject, topStartPosition.y - pressDepth, pressSpeed)
-                .setEaseOutQuad();
-        }
+            LeanTween.moveLocalY(buttonTop.gameObject, topStartPosition.y - pressDepth, pressSpeed).setEaseOutQuad();
 
-        // Picu event 'onPressed'
-        onPressed.Invoke();
+        onPressed?.Invoke();
+        onPressStateChanged?.Invoke(true);
+        NotifyManagers();
     }
 
     private void ReleaseButton()
     {
         isPressed = false;
-        Debug.Log("Tombol untuk " + requiredMass + "kg DILEPAS.");
-
-        // Animasikan tombol kembali ke atas
         if (buttonTop != null)
-        {
-            LeanTween.moveLocalY(buttonTop.gameObject, topStartPosition.y, pressSpeed)
-                .setEaseInQuad();
-        }
+            LeanTween.moveLocalY(buttonTop.gameObject, topStartPosition.y, pressSpeed).setEaseInQuad();
 
-        // Picu event 'onReleased'
-        onReleased.Invoke();
+        onReleased?.Invoke();
+        onPressStateChanged?.Invoke(false);
+        NotifyManagers();
+    }
+
+    private void NotifyManagers()
+    {
+        if (managers == null) return;
+        foreach (var m in managers)
+            if (m != null) m.CheckPuzzleState();
     }
 }
