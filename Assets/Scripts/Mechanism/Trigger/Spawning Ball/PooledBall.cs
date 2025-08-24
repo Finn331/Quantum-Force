@@ -11,6 +11,9 @@ public class PooledBall : MonoBehaviour
     [Tooltip("Tag dari objek yang akan membuat bola ini 'hancur' dan kembali ke pool.")]
     public string targetTag = "Wall"; // Anda bisa ganti ini di Inspector
 
+    [Header("Script Reference")]
+    [SerializeField] PickupSystem pickupSystem; // Referensi ke sistem pengambilan objek
+
     private float collisionGracePeriod = 0.2f;
     private bool canCollide = false;
 
@@ -31,6 +34,7 @@ public class PooledBall : MonoBehaviour
         if (gameObject.activeInHierarchy)
         {
             ReturnToPool();
+            pickupSystem.ThrowObject(); // Panggil sistem pengambilan objek
         }
     }
 

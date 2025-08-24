@@ -32,6 +32,10 @@ public class WeightButton : MonoBehaviour
     [Tooltip("Manager yang harus dicek ulang ketika status tombol ini berubah.")]
     public WeightPuzzleManager[] managers;
 
+    [Header("Light Setting")]
+    [SerializeField] private GameObject lampDeactivate;
+    [SerializeField] private GameObject lampActivate;
+
     private Vector3 topStartPosition;
     private bool isPressed = false;
     private readonly List<Rigidbody> objectsOnButton = new List<Rigidbody>();
@@ -42,6 +46,9 @@ public class WeightButton : MonoBehaviour
     {
         if (buttonTop != null)
             topStartPosition = buttonTop.localPosition;
+
+        // set lamp awal: nyala lampDeactivate, mati lampActivate
+        SetLampState(false);
     }
 
     private void OnTriggerEnter(Collider other)
@@ -91,8 +98,11 @@ public class WeightButton : MonoBehaviour
     private void PressButton()
     {
         isPressed = true;
+
         if (buttonTop != null)
             LeanTween.moveLocalY(buttonTop.gameObject, topStartPosition.y - pressDepth, pressSpeed).setEaseOutQuad();
+
+        SetLampState(true);
 
         onPressed?.Invoke();
         onPressStateChanged?.Invoke(true);
@@ -102,8 +112,11 @@ public class WeightButton : MonoBehaviour
     private void ReleaseButton()
     {
         isPressed = false;
+
         if (buttonTop != null)
             LeanTween.moveLocalY(buttonTop.gameObject, topStartPosition.y, pressSpeed).setEaseInQuad();
+
+        SetLampState(false);
 
         onReleased?.Invoke();
         onPressStateChanged?.Invoke(false);
@@ -115,5 +128,11 @@ public class WeightButton : MonoBehaviour
         if (managers == null) return;
         foreach (var m in managers)
             if (m != null) m.CheckPuzzleState();
+    }
+
+    private void SetLampState(bool active)
+    {
+        if (lampActivate != null) lampActivate.SetActive(active);
+        if (lampDeactivate != null) lampDeactivate.SetActive(!active);
     }
 }

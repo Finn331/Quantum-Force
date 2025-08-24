@@ -54,6 +54,11 @@ public class EnemyMelee : MonoBehaviour
     public float rageSpeedBoost = 2f;
     public float rageDamageMultiplier = 1.5f;
 
+    // 🔒 Lindungi fase rage dari interupsi hit
+    [Header("Rage Lock")]
+    [SerializeField] private float rageMinDuration = 1.2f; // durasi minimum anim "rage" (detik)
+    private bool rageLocked = false;
+
     [Header("Shield Settings")]
     [SerializeField] float shield;
     [SerializeField] public float currentShield;
@@ -138,8 +143,11 @@ public class EnemyMelee : MonoBehaviour
 
             foreach (RaycastHit hit in hits)
             {
-                if (((1 << hit.collider.gameObject.layer) & obstacleLayerMask) != 0)
+                // periksa obstacle pakai bitmask yang benar
+                if ((obstacleLayerMask.value & (1 << hit.collider.gameObject.layer)) != 0)
+                {
                     break;
+                }
 
                 float d = hit.distance;
                 if (d < closestDist)
@@ -286,8 +294,6 @@ public class EnemyMelee : MonoBehaviour
         }
     }
 
-
-
     void Wander()
     {
         if (waypoints.Length == 0) return;
@@ -309,20 +315,30 @@ public class EnemyMelee : MonoBehaviour
     {
         isRage = true;
         rageAnimating = true;
+        rageLocked = true; // 🔒 kunci state saat animasi rage
 
         agent.isStopped = true;
         agent.velocity = Vector3.zero;
         agent.ResetPath();
 
-        animator.SetTrigger("rage");
+        // Pastikan rage anim diputar dari awal dan state lain tidak ganggu
+        animator.ResetTrigger("attack");
         animator.SetBool("isWalking", false);
         animator.SetBool("isRunning", false);
         animator.SetBool("isRage", true);
+        animator.Play("rage 0", 0, 0f);
 
-        yield return new WaitUntil(() => animator.GetCurrentAnimatorStateInfo(0).IsName("rage"));
-        yield return new WaitUntil(() => animator.GetCurrentAnimatorStateInfo(0).normalizedTime >= 0.98f);
+        // Minimal durasi yang tidak boleh diinterupsi
+        yield return new WaitForSeconds(rageMinDuration);
+
+        // Jika masih di state "rage", tunggu sampai hampir selesai
+        var st = animator.GetCurrentAnimatorStateInfo(0);
+        if (st.IsName("rage"))
+            yield return new WaitUntil(() => animator.GetCurrentAnimatorStateInfo(0).normalizedTime >= 0.98f);
 
         rageAnimating = false;
+        rageLocked = false;
+
         agent.isStopped = false;
 
         wasProvoked = true;
@@ -332,25 +348,25 @@ public class EnemyMelee : MonoBehaviour
 
     public void RageSFX()
     {
-        //if (rageSFX != null)
-            SoundManager.Instance.PlaySound(rageSFX, 0f, .01f, false, 1f);
+        SoundManager.Instance.PlaySound(rageSFX, 0f, 0f, false, 1f);
     }
 
+    /// <summary>
+    /// Matikan mode rage (gunakan bila benar-benar ingin keluar dari rage).
+    /// </summary>
     public void DisableRage()
     {
-        isRage = true;
+        isRage = false;
         rageAnimating = false;
-        wasProvoked = true;
+        rageLocked = false;
 
         agent.isStopped = false;
-        agent.speed = chaseSpeed + rageSpeedBoost;
+        agent.speed = chaseSpeed; // kembali ke chase normal
 
         animator.ResetTrigger("rage");
-        animator.SetBool("isRage", true);
-        animator.SetBool("isRunning", true);
-        animator.SetBool("isIdle", false);
-
-        if (player != null)
+        animator.SetBool("isRage", false);
+        // Biarkan update menentukan running/walking berdasarkan jarak & path
+        if (player != null && agent.enabled)
             agent.SetDestination(player.position);
     }
 
@@ -372,8 +388,15 @@ public class EnemyMelee : MonoBehaviour
 
     public void OnTakeDamage()
     {
+        // Saat rage berlangsung atau terkunci, jangan ubah state supaya anim tidak terpotong.
+        if (rageAnimating || rageLocked)
+        {
+            if (hurtSFX) SoundManager.Instance.PlaySound(hurtSFX, 0f, 0f, true, 1f);
+            return;
+        }
+
         wasProvoked = true;
-        SoundManager.Instance.PlaySound(hurtSFX, 0f, 0f, true, 1f);
+        if (hurtSFX) SoundManager.Instance.PlaySound(hurtSFX, 0f, 0f, true, 1f);
     }
 
     public void DieTrigger()

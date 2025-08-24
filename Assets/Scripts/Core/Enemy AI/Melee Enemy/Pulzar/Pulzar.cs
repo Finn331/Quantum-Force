@@ -57,6 +57,9 @@ public class Pulzar : MonoBehaviour
     [SerializeField] float currentHealth;
     [SerializeField] float currentShield;
 
+    [Header("Script Reference")]
+    [SerializeField] NormalDoor normalDoor;
+
     private EnemyHealth enemyHealth;
     private Animator animator;
     private Vector3 lastPlayerPos;
@@ -335,6 +338,7 @@ public class Pulzar : MonoBehaviour
             enemyHealth.shield = 0;
             if (shieldVFX != null) shieldVFX.SetActive(false);
         }
+        normalDoor.enabled = true;
         DieTrigger();
     }
 
@@ -403,6 +407,14 @@ public class Pulzar : MonoBehaviour
             Gizmos.color = Color.cyan;
             Gizmos.DrawRay(transform.position, fovLine1);
             Gizmos.DrawRay(transform.position, fovLine2);
+        }
+    }
+
+    private void OnCollisionEnter(Collision collision)
+    {
+        if (collision.gameObject.CompareTag("FallenObject"))
+        {
+            Die();
         }
     }
 }

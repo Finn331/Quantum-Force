@@ -3,64 +3,110 @@ using UnityEngine;
 
 public class ObjectPool : MonoBehaviour
 {
-    // Singleton pattern agar mudah diakses dari mana saja
     public static ObjectPool Instance;
 
     [Header("Pool Settings")]
-    [Tooltip("Drag semua GameObject bola yang sudah Anda siapkan di Hierarchy ke dalam list ini.")]
-    [SerializeField] private List<GameObject> prewarmedObjects; // Menggantikan prefab dan poolSize
+    [Tooltip("Drag semua GameObject yang sudah ada di scene (prewarmed).")]
+    [SerializeField] private List<GameObject> prewarmedObjects = new List<GameObject>();
 
-    // "Kotak" untuk menyimpan objek yang tidak aktif
-    private Queue<GameObject> objectPool = new Queue<GameObject>();
+    // Pool disimpan per-tag
+    private readonly Dictionary<string, Queue<GameObject>> poolsByTag = new Dictionary<string, Queue<GameObject>>();
 
     private void Awake()
     {
-        // Setup Singleton
         if (Instance == null) Instance = this;
         else Destroy(gameObject);
     }
 
-    void Start()
+    private void Start()
     {
-        // --- LOGIKA UTAMA DIPERBARUI ---
-        // Alih-alih membuat objek baru, kita ambil dari list yang sudah ada
-        foreach (GameObject obj in prewarmedObjects)
+        poolsByTag.Clear();
+
+        foreach (var obj in prewarmedObjects)
         {
-            if (obj != null)
+            if (obj == null) continue;
+
+            // Ambil tag dari object (mis. "BallA", "BallB")
+            string tag = string.IsNullOrEmpty(obj.tag) ? "Untagged" : obj.tag;
+
+            if (!poolsByTag.TryGetValue(tag, out var q))
             {
-                obj.SetActive(false); // Sembunyikan objek
-                objectPool.Enqueue(obj); // Masukkan ke dalam "kotak"
+                q = new Queue<GameObject>();
+                poolsByTag[tag] = q;
             }
+
+            obj.SetActive(false);
+            q.Enqueue(obj);
         }
     }
 
     /// <summary>
-    /// Mengambil satu objek dari pool.
+    /// Ambil satu object dari pool berdasarkan tag (versi baru, modular).
     /// </summary>
-    public GameObject GetFromPool(Vector3 position, Quaternion rotation)
+    public GameObject GetFromPool(string tag, Vector3 position, Quaternion rotation)
     {
-        if (objectPool.Count == 0)
+        if (string.IsNullOrEmpty(tag))
         {
-            Debug.LogWarning("Object Pool is empty.");
+            Debug.LogWarning("[ObjectPool] Tag kosong. Gunakan overload tanpa tag atau berikan tag yang valid.");
             return null;
         }
 
-        GameObject obj = objectPool.Dequeue();
+        if (!poolsByTag.TryGetValue(tag, out var q) || q.Count == 0)
+        {
+            Debug.LogWarning($"[ObjectPool] Pool untuk tag '{tag}' kosong / belum disiapkan.");
+            return null;
+        }
 
-        obj.transform.position = position;
-        obj.transform.rotation = rotation;
-
-        obj.SetActive(true);
-
+        var obj = q.Dequeue();
+        ActivateAt(obj, position, rotation);
         return obj;
     }
 
     /// <summary>
-    /// Mengembalikan objek ke dalam pool.
+    /// Overload lama: ambil dari pool mana saja yang masih punya stok.
+    /// </summary>
+    public GameObject GetFromPool(Vector3 position, Quaternion rotation)
+    {
+        // Cari antrian yang masih punya objek
+        foreach (var kv in poolsByTag)
+        {
+            var q = kv.Value;
+            if (q.Count > 0)
+            {
+                var obj = q.Dequeue();
+                ActivateAt(obj, position, rotation);
+                return obj;
+            }
+        }
+
+        Debug.LogWarning("[ObjectPool] Semua pool kosong.");
+        return null;
+    }
+
+    /// <summary>
+    /// Kembalikan object ke pool sesuai tag object-nya.
     /// </summary>
     public void ReturnToPool(GameObject obj)
     {
+        if (obj == null) return;
+
+        string tag = string.IsNullOrEmpty(obj.tag) ? "Untagged" : obj.tag;
+
+        if (!poolsByTag.TryGetValue(tag, out var q))
+        {
+            q = new Queue<GameObject>();
+            poolsByTag[tag] = q;
+        }
+
         obj.SetActive(false);
-        objectPool.Enqueue(obj);
+        q.Enqueue(obj);
+    }
+
+    private static void ActivateAt(GameObject obj, Vector3 pos, Quaternion rot)
+    {
+        var t = obj.transform;
+        t.position = pos;
+        t.rotation = rot;
+        obj.SetActive(true);
     }
 }
