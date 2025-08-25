@@ -3036,6 +3036,8 @@ MonoBehaviour:
   chaseSpeed: 6
   angularSpeed: 360
   acceleration: 16
+  moveTurnSpeed: 12
+  attackTurnSpeed: 10
   visionBlockLayer:
     serializedVersion: 2
     m_Bits: 270336
@@ -3044,10 +3046,28 @@ MonoBehaviour:
   fieldOfViewAngle: 90
   eyeHeight: 1.5
   stunDuration: 3
+  hitOrigin: {fileID: 0}
+  hitOriginLocal: {x: 0, y: 1.2, z: 0.25}
+  hitRadius: 0.3
+  hitLength: 1.4
+  hitMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
   meleeDamage: 40
   attackCooldown: 2.5
+  attackEnterDistance: 1.4
+  attackExitDistance: 2
+  attackEnterHaltTime: 0.05
+  syncAttackDistancesToHitLength: 1
+  exitExtra: 0.6
+  instantAttackDistance: 1.4
+  defaultAttack: 0
+  phase1Attack: 0
+  phase2Attack: 1
+  enragedAttack: 2
   rageChaseSpeed: 6
   rageMeleeDamage: 30
+  phaseChangeRageDuration: 2
   attackSFX: []
   rageSFX: {fileID: 8300000, guid: fd178deb0861be34e9c4730423bfa297, type: 3}
   hurtSFX: {fileID: 0}
@@ -3057,6 +3077,12 @@ MonoBehaviour:
   sfxVolume: 1
   shieldVFX: {fileID: 0}
   shieldAmount: 999999
+  phase2a_BreakTags: []
+  phase2b_BreakTags: []
+  destroyProjectileOnHit: 1
+  phase2ProjectileLayerFilter:
+    serializedVersion: 2
+    m_Bits: 0
 --- !u!114 &4419581197950431311
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3069,7 +3095,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5890fdf64f390414bb1e5dbe4986e4aa, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  uniqueID: e3d474e6-f253-4599-9c62-09a1c48cc634
+  uniqueID: f2e91af6-9d48-409d-a9c3-5954f03181b5
   _name: Singulra
   health: 0
   shield: 0

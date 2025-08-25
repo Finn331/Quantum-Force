@@ -149,7 +149,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6184e55a5f3c32343a7b06ca6cc27515, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  lifetime: 7
+  lifetime: 30
   impactTags:
   - GlassDoor
   impactSound: {fileID: 0}

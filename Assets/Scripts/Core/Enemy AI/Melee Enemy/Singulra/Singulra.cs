@@ -50,6 +50,8 @@ public class Singulra : MonoBehaviour
     public float chaseSpeed = 4f;
     public float angularSpeed = 240f;
     public float acceleration = 12f;
+    public float moveTurnSpeed = 12f;
+    public float attackTurnSpeed = 10f;
 
     [Header("Player Detection")]
     public LayerMask visionBlockLayer;
@@ -61,32 +63,41 @@ public class Singulra : MonoBehaviour
     [Header("Stun Settings")]
     public float stunDuration = 3f;
 
-    [Header("Attack Settings")]
+    [Header("Melee Hit (Ray/SphereCast)")]
+    [Tooltip("Transform asal cast (mis. empty di tangan). Jika kosong, pakai hitOriginLocal.")]
+    public Transform hitOrigin;
+    [Tooltip("Origin lokal jika hitOrigin null.")]
+    public Vector3 hitOriginLocal = new Vector3(0f, 1.2f, 0.25f);
+    [Tooltip("Radius SphereCast. 0.25–0.35 untuk human melee.")]
+    public float hitRadius = 0.3f;
+    [Tooltip("Panjang jangkauan pukulan.")]
+    public float hitLength = 1.4f;
+    [Tooltip("Layer yang bisa kena pukulan (isi Player).")]
+    public LayerMask hitMask = ~0;
+
+    [Header("Serang & Cooldown")]
     public float meleeDamage = 20f;
-    public float attackCooldown = 2f;
+    public float attackCooldown = 1.4f;
     private float lastAttackTime;
     private bool wasProvoked = false;
 
     [Header("Attack Movement Tuning")]
-    [Tooltip("Distance to ENTER attack (slightly smaller than stoppingDistance so it stops quickly).")]
-    public float attackEnterDistance = 2.6f;
-    [Tooltip("Distance to EXIT attack (slightly larger than stoppingDistance to avoid flip-flop).")]
-    public float attackExitDistance = 3.4f;
-    [Tooltip("Tiny halt when entering Attack to ensure feet plant before anim trigger.")]
+    public float attackEnterDistance = 1.4f;
+    public float attackExitDistance = 2.0f;
     public float attackEnterHaltTime = 0.05f;
 
-    [Header("Instant Attack On Sight")]
-    [Tooltip("If player is visible and distance <= this value, do instant attack.")]
-    public float instantAttackDistance = 2.8f;
-    public enum AttackChoice { Attack, Attack2, Random }
+    [Header("Sync Distances With Hit")]
+    [Tooltip("Jika ON, jarak attack otomatis mengikuti hitLength.")]
+    public bool syncAttackDistancesToHitLength = true;
+    [Tooltip("Offset untuk attackExitDistance (lebih besar sedikit agar anti flip-flop).")]
+    public float exitExtra = 0.6f;
 
-    [Tooltip("Default instant attack outside special phases.")]
+    [Header("Instant Attack On Sight")]
+    public float instantAttackDistance = 1.4f;
+    public enum AttackChoice { Attack, Attack2, Random }
     public AttackChoice defaultAttack = AttackChoice.Attack;
-    [Tooltip("Instant attack during Phase1 (Vulnerable Shield).")]
     public AttackChoice phase1Attack = AttackChoice.Attack;
-    [Tooltip("Instant attack during Phase2 (Waypoint Shield).")]
     public AttackChoice phase2Attack = AttackChoice.Attack2;
-    [Tooltip("Instant attack when enraged (low HP).")]
     public AttackChoice enragedAttack = AttackChoice.Random;
 
     [Header("Rage Mode Settings")]
@@ -94,6 +105,10 @@ public class Singulra : MonoBehaviour
     public float rageChaseSpeed = 6f;
     public float rageMeleeDamage = 30f;
     private const float ENRAGE_THRESHOLD = 0.9f;
+
+    [Header("Phase Change Rage Transition")]
+    public float phaseChangeRageDuration = 2.0f;
+    private bool isPhaseChanging = false;
 
     [Header("SFX")]
     public AudioClip[] attackSFX;
@@ -130,7 +145,8 @@ public class Singulra : MonoBehaviour
         audioSource.playOnAwake = false;
         audioSource.volume = sfxVolume;
 
-        agent.updateRotation = true;
+        agent.updateRotation = false; // rotasi manual
+        agent.updateUpAxis = true;
     }
 
     private void Start()
@@ -144,10 +160,29 @@ public class Singulra : MonoBehaviour
         agent.speed = walkSpeed;
         agent.angularSpeed = angularSpeed;
         agent.acceleration = acceleration;
-        agent.stoppingDistance = attackRange;
+
+        if (syncAttackDistancesToHitLength)
+        {
+            attackEnterDistance = hitLength;
+            attackExitDistance = hitLength + exitExtra;
+            instantAttackDistance = hitLength;
+        }
+        agent.stoppingDistance = attackEnterDistance;
 
         if (wanderWaypoints != null && wanderWaypoints.Length > 0)
             agent.SetDestination(wanderWaypoints[currentWanderWaypointIndex].position);
+    }
+
+    private void OnValidate()
+    {
+        if (syncAttackDistancesToHitLength)
+        {
+            attackEnterDistance = Mathf.Max(0.1f, hitLength);
+            attackExitDistance = attackEnterDistance + Mathf.Max(0.1f, exitExtra);
+            instantAttackDistance = attackEnterDistance;
+        }
+        hitRadius = Mathf.Max(0.01f, hitRadius);
+        hitLength = Mathf.Max(0.05f, hitLength);
     }
 
     private void Update()
@@ -157,13 +192,16 @@ public class Singulra : MonoBehaviour
         if (currentState == AIState.Wandering || currentState == AIState.Chasing || currentState == AIState.Attacking)
             CheckPhaseTriggers();
 
-        if (currentState == AIState.Wandering || currentState == AIState.Chasing)
+        if (currentState == AIState.Wandering || currentState == AIState.Chasing || currentState == AIState.Phase2_WaypointShield)
         {
             float speedMag = agent.desiredVelocity.magnitude;
             animator.SetBool("isRunning", speedMag > 0.1f && !agent.isStopped);
             animator.SetBool("isWalking", speedMag > 0.1f && !agent.isStopped);
             animator.SetBool("isIdle", speedMag <= 0.1f || agent.isStopped);
         }
+
+        if (!agent.isStopped && (currentState == AIState.Wandering || currentState == AIState.Chasing || currentState == AIState.Phase2_WaypointShield))
+            AlignToVelocity();
 
         switch (currentState)
         {
@@ -177,6 +215,16 @@ public class Singulra : MonoBehaviour
         }
 
         lastPlayerPos = player.position;
+    }
+
+    private void AlignToVelocity()
+    {
+        Vector3 v = agent.desiredVelocity; v.y = 0f;
+        if (v.sqrMagnitude > 0.001f)
+        {
+            Quaternion target = Quaternion.LookRotation(v.normalized, Vector3.up);
+            transform.rotation = Quaternion.Slerp(transform.rotation, target, Time.deltaTime * moveTurnSpeed);
+        }
     }
 
     private void OnTriggerEnter(Collider other)
@@ -203,6 +251,8 @@ public class Singulra : MonoBehaviour
 
     private void CheckPhaseTriggers()
     {
+        if (isPhaseChanging) return;
+
         float currentHP = enemyHealth.health;
 
         if (!isEnraged && currentHP <= maxHealth * ENRAGE_THRESHOLD)
@@ -210,16 +260,40 @@ public class Singulra : MonoBehaviour
 
         if (currentHP <= phase2b_Threshold && !phase2bTriggered)
         {
-            StartCoroutine(EnterPhase_Phase2(Phase2Sub.B, phase2b_Waypoint));
+            StartCoroutine(PhaseChangeRageThen(() => ActivatePhase2Shield(Phase2Sub.B, phase2b_Waypoint)));
+            phase2bTriggered = true;
         }
         else if (currentHP <= phase2a_Threshold && !phase2aTriggered)
         {
-            StartCoroutine(EnterPhase_Phase2(Phase2Sub.A, phase2a_Waypoint));
+            StartCoroutine(PhaseChangeRageThen(() => ActivatePhase2Shield(Phase2Sub.A, phase2a_Waypoint)));
+            phase2aTriggered = true;
         }
         else if (currentHP <= phase1_Threshold && !phase1Triggered)
         {
-            StartCoroutine(EnterPhase_Phase1());
+            StartCoroutine(PhaseChangeRageThen(ActivatePhase1Shield));
+            phase1Triggered = true;
         }
+    }
+
+    private IEnumerator PhaseChangeRageThen(System.Action onPhaseActivated)
+    {
+        if (isPhaseChanging) yield break;
+        isPhaseChanging = true;
+
+        currentState = AIState.Raging;
+        StopAgentHard();
+
+        ResetAllAnimationStates();
+        animator.SetBool("isRage", true);
+        PlaySFX(rageSFX);
+
+        yield return new WaitForSeconds(phaseChangeRageDuration);
+
+        animator.SetBool("isRage", false);
+
+        onPhaseActivated?.Invoke();
+
+        isPhaseChanging = false;
     }
 
     private void ActivateEnrageMode()
@@ -227,42 +301,10 @@ public class Singulra : MonoBehaviour
         isEnraged = true;
         chaseSpeed = rageChaseSpeed;
         meleeDamage = rageMeleeDamage;
-        Debug.Log("ENRAGE MODE ACTIVATED!");
-    }
-
-    private IEnumerator EnterPhase_Phase1()
-    {
-        currentState = AIState.Raging;
-        StopAgentHard();
-
-        ResetAllAnimationStates();
-        animator.SetBool("isRage", true);
-        PlaySFX(rageSFX);
-
-        yield return new WaitForSeconds(2.0f);
-
-        animator.SetBool("isRage", false);
-        ActivatePhase1Shield();
-    }
-
-    private IEnumerator EnterPhase_Phase2(Phase2Sub which, Transform waypoint)
-    {
-        currentState = AIState.Raging;
-        StopAgentHard();
-
-        ResetAllAnimationStates();
-        animator.SetBool("isRage", true);
-        PlaySFX(rageSFX);
-
-        yield return new WaitForSeconds(2.0f);
-
-        animator.SetBool("isRage", false);
-        ActivatePhase2Shield(which, waypoint);
     }
 
     private void ActivatePhase1Shield()
     {
-        phase1Triggered = true;
         currentState = AIState.Phase1_VulnerableShield;
         currentPhase2 = Phase2Sub.None;
 
@@ -301,9 +343,6 @@ public class Singulra : MonoBehaviour
 
     private void ActivatePhase2Shield(Phase2Sub which, Transform waypoint)
     {
-        if (which == Phase2Sub.A) phase2aTriggered = true;
-        else if (which == Phase2Sub.B) phase2bTriggered = true;
-
         currentState = AIState.Phase2_WaypointShield;
         currentPhase2 = which;
 
@@ -333,6 +372,7 @@ public class Singulra : MonoBehaviour
         {
             agent.isStopped = false;
             SetAnimationState(true, false, false);
+            AlignToVelocity();
         }
     }
 
@@ -343,6 +383,11 @@ public class Singulra : MonoBehaviour
 
     private void OnCollisionEnter(Collision collision)
     {
+        if (currentState == AIState.Phase2_WaypointShield)
+        {
+            agent.velocity = Vector3.zero;
+        }
+
         if (currentState != AIState.Phase2_WaypointShield || enemyHealth.shield <= 0) return;
 
         if (phase2ProjectileLayerFilter.value != 0)
@@ -366,7 +411,6 @@ public class Singulra : MonoBehaviour
         }
     }
 
-    // Instant attack when target is in sight
     private void DetectPlayer()
     {
         if (player == null) return;
@@ -391,7 +435,7 @@ public class Singulra : MonoBehaviour
             if (!wasProvoked)
             {
                 wasProvoked = true;
-                StartCoroutine(TriggerInitialRage());
+                StartCoroutine(TriggerInitialRageOnce());
             }
         }
     }
@@ -421,8 +465,7 @@ public class Singulra : MonoBehaviour
             case AttackChoice.Attack: animator.SetTrigger("attack"); break;
             case AttackChoice.Attack2: animator.SetTrigger("attack2"); break;
             case AttackChoice.Random:
-                if (Random.value < 0.5f) animator.SetTrigger("attack");
-                else animator.SetTrigger("attack2");
+                if (Random.value < 0.5f) animator.SetTrigger("attack"); else animator.SetTrigger("attack2");
                 break;
         }
 
@@ -436,12 +479,10 @@ public class Singulra : MonoBehaviour
         Vector3 toPlayer = player.position - transform.position;
         toPlayer.y = 0f;
         if (toPlayer.sqrMagnitude > 0.001f)
-        {
             transform.rotation = Quaternion.LookRotation(toPlayer.normalized, Vector3.up);
-        }
     }
 
-    private IEnumerator TriggerInitialRage()
+    private IEnumerator TriggerInitialRageOnce()
     {
         currentState = AIState.Raging;
         StopAgentHard();
@@ -450,7 +491,7 @@ public class Singulra : MonoBehaviour
         animator.SetBool("isRage", true);
         PlaySFX(rageSFX);
 
-        yield return new WaitForSeconds(2.0f);
+        yield return new WaitForSeconds(phaseChangeRageDuration);
 
         animator.SetBool("isRage", false);
         currentState = AIState.Chasing;
@@ -475,6 +516,7 @@ public class Singulra : MonoBehaviour
         }
 
         SetAnimationState(true, false, false);
+        agent.isStopped = false;
     }
 
     private void Chase()
@@ -510,14 +552,11 @@ public class Singulra : MonoBehaviour
 
     private void Attack()
     {
-        agent.updateRotation = false;
-
-        Vector3 toPlayer = (player.position - transform.position);
-        toPlayer.y = 0f;
+        Vector3 toPlayer = player.position - transform.position; toPlayer.y = 0f;
         if (toPlayer.sqrMagnitude > 0.001f)
         {
             Quaternion face = Quaternion.LookRotation(toPlayer.normalized, Vector3.up);
-            transform.rotation = Quaternion.Slerp(transform.rotation, face, Time.deltaTime * 10f);
+            transform.rotation = Quaternion.Slerp(transform.rotation, face, Time.deltaTime * attackTurnSpeed);
         }
 
         animator.SetBool("isRunning", false);
@@ -531,8 +570,7 @@ public class Singulra : MonoBehaviour
             if (isEnraged)
             {
                 int choice = Random.Range(0, 2);
-                if (choice == 0) animator.SetTrigger("attack");
-                else animator.SetTrigger("attack2");
+                if (choice == 0) animator.SetTrigger("attack"); else animator.SetTrigger("attack2");
             }
             else
             {
@@ -543,7 +581,6 @@ public class Singulra : MonoBehaviour
         float dist = Vector3.Distance(transform.position, player.position);
         if (dist > attackExitDistance)
         {
-            agent.updateRotation = true;
             currentState = AIState.Chasing;
         }
     }
@@ -560,7 +597,7 @@ public class Singulra : MonoBehaviour
         if (currentState == AIState.Wandering && !wasProvoked)
         {
             wasProvoked = true;
-            StartCoroutine(TriggerInitialRage());
+            StartCoroutine(TriggerInitialRageOnce());
         }
         PlaySFX(hurtSFX);
     }
@@ -577,22 +614,45 @@ public class Singulra : MonoBehaviour
         StopAgentHard();
 
         ResetAllAnimationStates();
-        animator.SetBool("isDie", true);
+        animator.SetTrigger("die");
+
         PlaySFX(deathSFX);
 
         if (enemyCollider != null) enemyCollider.enabled = false;
-        Destroy(gameObject, 3f);
+        Destroy(gameObject, 10f);
     }
 
+    // ===================== DAMAGE DENGAN SPHERECAST =====================
+    // Panggil via Animation Event pada frame hit
     public void DealMeleeDamage()
     {
         if (currentState != AIState.Attacking || enemyHealth.shield > 0) return;
+        if (player == null) return;
 
-        if (Vector3.Distance(transform.position, player.position) <= attackRange)
+        Vector3 origin = hitOrigin != null ? hitOrigin.position : transform.TransformPoint(hitOriginLocal);
+        Vector3 dir = transform.forward;
+
+        RaycastHit[] hits = Physics.SphereCastAll(origin, hitRadius, dir, hitLength, hitMask, QueryTriggerInteraction.Ignore);
+        if (hits == null || hits.Length == 0) return;
+
+        for (int i = 0; i < hits.Length; i++)
         {
-            Debug.Log("Player terkena serangan melee sebesar " + meleeDamage + " damage!");
+            var h = hits[i];
+
+            // Hanya damage player
+            if (h.collider.transform == player || h.collider.CompareTag("Player"))
+            {
+                var stats = h.collider.GetComponent<PlayerStats>();
+                if (stats == null) stats = h.collider.GetComponentInParent<PlayerStats>();
+                if (stats != null)
+                {
+                    stats.Damage(meleeDamage, false);
+                }
+                break;
+            }
         }
     }
+    // ===================================================================
 
     public void PlayRageSFX() { PlaySFX(rageSFX); }
     public void PlayAttackSFX()
@@ -604,10 +664,7 @@ public class Singulra : MonoBehaviour
 
     private void PlaySFX(AudioClip clip)
     {
-        if (clip != null)
-        {
-            SoundManager.Instance.PlaySound(clip, 0f, 0f, true, 0f);
-        }
+        if (clip != null) SoundManager.Instance.PlaySound(clip, 0f, 0f, true, 0f);
     }
 
     private void ActivateShieldVisuals()
@@ -626,7 +683,6 @@ public class Singulra : MonoBehaviour
         currentState = AIState.Chasing;
         currentPhase2 = Phase2Sub.None;
         agent.isStopped = false;
-        agent.updateRotation = true;
     }
 
     private void SetAnimationState(bool isWalking, bool isRunning, bool isIdle)
@@ -643,14 +699,27 @@ public class Singulra : MonoBehaviour
         animator.ResetTrigger("attack");
         animator.ResetTrigger("attack2");
         animator.ResetTrigger("stunned");
+        animator.ResetTrigger("die");
     }
 
     private void OnDrawGizmosSelected()
     {
+        // Detection/attack range
         Gizmos.color = Color.yellow;
         Gizmos.DrawWireSphere(transform.position, detectionRange);
         Gizmos.color = Color.red;
         Gizmos.DrawWireSphere(transform.position, attackRange);
+
+        // Melee cast gizmos
+        Gizmos.color = Color.magenta;
+        Vector3 origin = hitOrigin != null ? hitOrigin.position
+                                           : Application.isPlaying ? transform.TransformPoint(hitOriginLocal)
+                                                                   : transform.TransformPoint(hitOriginLocal);
+        Vector3 end = origin + transform.forward * hitLength;
+        Gizmos.DrawLine(origin, end);
+        // start & end spheres
+        Gizmos.DrawWireSphere(origin, hitRadius);
+        Gizmos.DrawWireSphere(end, hitRadius);
 
         if (player != null)
         {

@@ -30,6 +30,13 @@ public class QuestionTrigger : MonoBehaviour
     private float originalJumpForce = 10f;
     private float cameraSensitivity = 4f;
 
+    private GameObject localGameobject;
+
+    private void Start()
+    {
+        localGameobject = GetComponent<GameObject>();
+    }
+
     void LockCursor()
     {
         Cursor.lockState = CursorLockMode.Locked;
@@ -42,6 +49,7 @@ public class QuestionTrigger : MonoBehaviour
         playerMovement.sensitivityX = cameraSensitivity;
         playerMovement.sensitivityY = cameraSensitivity;
         crosshair.SetActive(true);
+        LeanTween.moveLocalY(localGameobject, -10f, 0.5f).setEase(LeanTweenType.easeOutBack);
     }
 
     void UnlockCursor()
