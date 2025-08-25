@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 5273017772168406091}
   - component: {fileID: 465503867194262850}
   - component: {fileID: 2308666568495360373}
+  - component: {fileID: 2320466265960825385}
   m_Layer: 20
   m_Name: Falling Ball
   m_TagString: FallenObject
@@ -136,3 +137,16 @@ Rigidbody:
   m_Interpolate: 0
   m_Constraints: 0
   m_CollisionDetection: 2
+--- !u!114 &2320466265960825385
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4258687076206738664}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d9c1ddad8c871ae48b652aa5c4f8b3ec, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  ballTimer: 10

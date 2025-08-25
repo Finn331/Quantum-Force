@@ -32,16 +32,19 @@ public class QuestionTrigger : MonoBehaviour
 
     private GameObject localGameobject;
 
+    // --- PREVENT DOUBLE TRIGGER ---
+    private bool isAnswered = false;
+
     private void Start()
     {
-        localGameobject = GetComponent<GameObject>();
+        localGameobject = gameObject; // perbaikan
     }
 
     void LockCursor()
     {
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
-        pauseMenu.enabled = true; // Enable pause menu to allow interaction
+        pauseMenu.enabled = true;
         playerMovement.walkSpeed = originalWalkSpeed;
         playerMovement.runSpeed = originalRunSpeed;
         playerMovement.acceleration = originalAcceleration;
@@ -49,14 +52,14 @@ public class QuestionTrigger : MonoBehaviour
         playerMovement.sensitivityX = cameraSensitivity;
         playerMovement.sensitivityY = cameraSensitivity;
         crosshair.SetActive(true);
-        LeanTween.moveLocalY(localGameobject, -10f, 0.5f).setEase(LeanTweenType.easeOutBack);
+        //LeanTween.moveLocalY(localGameobject, -10f, 0.5f).setEase(LeanTweenType.easeOutBack);
     }
 
     void UnlockCursor()
     {
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
-        pauseMenu.enabled = false; // Disable pause menu to prevent interaction while question is open
+        pauseMenu.enabled = false;
         playerMovement.walkSpeed = 0f;
         playerMovement.runSpeed = 0f;
         playerMovement.acceleration = 0f;
@@ -68,6 +71,7 @@ public class QuestionTrigger : MonoBehaviour
 
     public void OpenQuestion()
     {
+        if (isAnswered) return; // kalau sudah dijawab, tidak bisa buka lagi
         questionPanel.SetActive(true);
         UnlockCursor();
         LeanTween.scale(questionPanel, Vector3.one, 0.5f).setEase(LeanTweenType.easeOutBack);
@@ -84,13 +88,15 @@ public class QuestionTrigger : MonoBehaviour
 
     public void RightAnswer()
     {
+        if (isAnswered) return;
+        isAnswered = true;
+
         rightOrWrongTextPanel.SetActive(true);
         rightAnswerText.SetActive(true);
 
-        // panggil event untuk jawaban benar
         onRightAnswer?.Invoke();
 
-        LeanTween.scale(rightAnswerText, new Vector3(5.1102f, 5.1102f, 5.1102f), 1).setEase(LeanTweenType.easeOutSine).setOnComplete(() =>
+        LeanTween.scale(rightAnswerText, new Vector3(5.11f, 5.11f, 5.11f), 1f).setEase(LeanTweenType.easeOutSine).setOnComplete(() =>
         {
             CloseQuestion();
             rightOrWrongTextPanel.SetActive(false);
@@ -101,13 +107,15 @@ public class QuestionTrigger : MonoBehaviour
 
     public void WrongAnswer()
     {
+        if (isAnswered) return;
+        isAnswered = true;
+
         rightOrWrongTextPanel.SetActive(true);
         wrongAnswerText.SetActive(true);
 
-        // panggil event untuk jawaban salah
         onWrongAnswer?.Invoke();
 
-        LeanTween.scale(wrongAnswerText, new Vector3(5.1102f, 5.1102f, 5.1102f), 1f).setEase(LeanTweenType.easeOutSine).setOnComplete(() =>
+        LeanTween.scale(wrongAnswerText, new Vector3(5.11f, 5.11f, 5.11f), 1f).setEase(LeanTweenType.easeOutSine).setOnComplete(() =>
         {
             CloseQuestion();
             rightOrWrongTextPanel.SetActive(false);
