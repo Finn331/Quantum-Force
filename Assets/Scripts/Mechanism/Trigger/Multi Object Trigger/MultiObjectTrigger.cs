@@ -62,6 +62,9 @@ public class MultiObjectTrigger : MonoBehaviour
 
             // Tandai bahwa trigger ini sudah digunakan
             hasBeenTriggered = true;
+
+            // Destroy diri sendiri setelah 2 detik
+            Destroy(gameObject, 2f);
         }
     }
 }

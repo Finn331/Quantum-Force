@@ -1,27 +1,21 @@
-using cowsins;
-using Unity.VisualScripting;
 using UnityEngine;
+using cowsins; // karena pakai Crate dari cowsins
 
 [RequireComponent(typeof(Rigidbody))]
 [RequireComponent(typeof(Collider))]
 public class WaveBreaker : MonoBehaviour
 {
-    [Header("Wave Effect Settings")]
-    [Tooltip("Prefab dari efek visual gelombang suara (misalnya, Particle System).")]
-    public GameObject shockwaveVFX;
-    [Tooltip("Radius dari gelombang suara yang dihasilkan.")]
-    public float shockwaveRadius = 10f;
-    [Tooltip("Layer dari objek yang bisa dihancurkan oleh gelombang (tembok, perisai, dll.).")]
-    public LayerMask destructibleLayer;
-
     [Header("Cannonball Settings")]
-    [SerializeField] float lifetime;
+    [SerializeField] private float lifetime = 10f;
+
+    [Header("Impact Tags")]
+    [Tooltip("Tag yang akan membuat Cannon Ball hancur (misalnya: Wall, Ground, dll).")]
+    [SerializeField] private string[] impactTags = new[] { "GlassDoor" };
 
     [Header("SFX")]
-    [Tooltip("Suara yang dimainkan saat bola menabrak tembok.")]
+    [Tooltip("Suara saat bola menabrak.")]
     public AudioClip impactSound;
-    [Tooltip("Suara dari gelombang suara itu sendiri.")]
-    public AudioClip shockwaveSound;
+
     private AudioSource audioSource;
 
     private void Awake()
@@ -29,55 +23,71 @@ public class WaveBreaker : MonoBehaviour
         audioSource = GetComponent<AudioSource>();
         if (audioSource == null) audioSource = gameObject.AddComponent<AudioSource>();
         audioSource.spatialBlend = 1f;
+        audioSource.playOnAwake = false;
     }
 
     private void Start()
     {
-        Destroy(gameObject, lifetime);
+        if (lifetime > 0f) Destroy(gameObject, lifetime);
     }
 
     private void OnCollisionEnter(Collision collision)
     {
-        if (collision.gameObject.CompareTag("Wall"))
+        GameObject other = collision.gameObject;
+
+        // 1) Kalau kena GlassBreak langsung hancurkan Crate
+        GlassBreak gb = other.GetComponent<GlassBreak>() ??
+                        other.GetComponentInParent<GlassBreak>() ??
+                        other.GetComponentInChildren<GlassBreak>();
+
+        if (gb != null)
         {
-            Debug.Log("WaveBreaker ball hit a Wall!");
+            Crate crate = gb.GetComponent<Crate>() ??
+                          gb.GetComponentInParent<Crate>() ??
+                          gb.GetComponentInChildren<Crate>();
 
-            ContactPoint contact = collision.GetContact(0);
-            Vector3 position = contact.point;
+            if (crate != null)
+            {
+                crate.Die();
+                PlayImpactSFX(collision.GetContact(0).point);
+                Destroy(gameObject);
+                return;
+            }
+        }
 
-            if (impactSound != null) AudioSource.PlayClipAtPoint(impactSound, position);
+        // 2) Kalau bukan GlassBreak tapi punya Crate hancurkan juga
+        Crate c = other.GetComponent<Crate>() ??
+                  other.GetComponentInParent<Crate>() ??
+                  other.GetComponentInChildren<Crate>();
 
-            CreateShockwave(position);
+        if (c != null)
+        {
+            c.Die();
+            PlayImpactSFX(collision.GetContact(0).point);
+            Destroy(gameObject);
+            return;
+        }
 
+        // 3) Kalau kena tag tertentu (misalnya Wall) bola hancur
+        if (IsImpactTag(other.tag))
+        {
+            PlayImpactSFX(collision.GetContact(0).point);
             Destroy(gameObject);
         }
     }
 
-    private void CreateShockwave(Vector3 origin)
+    private bool IsImpactTag(string t)
     {
-        if (shockwaveVFX != null)
+        if (impactTags == null) return false;
+        foreach (var tag in impactTags)
         {
-            Instantiate(shockwaveVFX, origin, Quaternion.identity);
+            if (!string.IsNullOrEmpty(tag) && t == tag) return true;
         }
+        return false;
+    }
 
-        if (shockwaveSound != null) AudioSource.PlayClipAtPoint(shockwaveSound, origin);
-
-        // Deteksi semua objek dalam radius yang berada di layer 'destructibleLayer'
-        Collider[] objectsInRange = Physics.OverlapSphere(origin, shockwaveRadius, destructibleLayer);
-
-        Debug.Log(objectsInRange.Length + " object(s) with destructible layer detected in shockwave radius.");
-
-        // --- LOGIKA DIPERBARUI ---
-        // Cari dan panggil fungsi 'DestroyObject' pada setiap objek yang terdeteksi
-        foreach (Collider col in objectsInRange)
-        {
-            // Coba dapatkan skrip Crate dari objek yang terkena
-            Destructible destructibleObject = col.GetComponent<Crate>();
-            if (destructibleObject != null)
-            {
-                // Jika skripnya ada, panggil fungsi Die()
-                destructibleObject.Die();
-            }
-        }
+    private void PlayImpactSFX(Vector3 pos)
+    {
+        if (impactSound != null) AudioSource.PlayClipAtPoint(impactSound, pos);
     }
 }

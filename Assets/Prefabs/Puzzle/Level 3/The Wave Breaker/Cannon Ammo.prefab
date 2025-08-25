@@ -13,11 +13,10 @@ GameObject:
   - component: {fileID: 2261371702058442890}
   - component: {fileID: 5212783793638309196}
   - component: {fileID: 7591009234354030399}
-  - component: {fileID: 8105290625613924031}
   - component: {fileID: 8179801842643240799}
   m_Layer: 0
   m_Name: Cannon Ammo
-  m_TagString: Untagged
+  m_TagString: CannonAmmo
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -119,7 +118,7 @@ Rigidbody:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 6458163022525134431}
   serializedVersion: 4
-  m_Mass: 1
+  m_Mass: 5
   m_Drag: 0
   m_AngularDrag: 0.05
   m_CenterOfMass: {x: 0, y: 0, z: 0}
@@ -138,26 +137,6 @@ Rigidbody:
   m_Interpolate: 0
   m_Constraints: 0
   m_CollisionDetection: 0
---- !u!114 &8105290625613924031
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6458163022525134431}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6184e55a5f3c32343a7b06ca6cc27515, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  shockwaveVFX: {fileID: 0}
-  shockwaveRadius: 10
-  destructibleLayer:
-    serializedVersion: 2
-    m_Bits: 2048
-  lifetime: 7
-  impactSound: {fileID: 0}
-  shockwaveSound: {fileID: 0}
 --- !u!114 &8179801842643240799
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -170,11 +149,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6184e55a5f3c32343a7b06ca6cc27515, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  shockwaveVFX: {fileID: 0}
-  shockwaveRadius: 10
-  destructibleLayer:
-    serializedVersion: 2
-    m_Bits: 2097152
   lifetime: 7
+  impactTags:
+  - GlassDoor
   impactSound: {fileID: 0}
-  shockwaveSound: {fileID: 0}

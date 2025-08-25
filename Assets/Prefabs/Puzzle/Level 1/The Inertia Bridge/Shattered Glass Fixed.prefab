@@ -1269,6 +1269,9 @@ PrefabInstance:
     - {fileID: -8391222552659086748, guid: 454619da3eb16524aa212a083ee0365c, type: 3}
     m_AddedGameObjects: []
     m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 454619da3eb16524aa212a083ee0365c, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 6469740020296724399}
     - targetCorrespondingSourceObject: {fileID: -2995828229661691052, guid: 454619da3eb16524aa212a083ee0365c, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1495970053535493404}
@@ -6958,6 +6961,11 @@ Rigidbody:
   m_Interpolate: 0
   m_Constraints: 0
   m_CollisionDetection: 0
+--- !u!4 &8552092159438410290 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 454619da3eb16524aa212a083ee0365c, type: 3}
+  m_PrefabInstance: {fileID: 8153094221805893081}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &8608068543726537843 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 455878707011090858, guid: 454619da3eb16524aa212a083ee0365c, type: 3}
@@ -7117,6 +7125,46 @@ Rigidbody:
   m_Interpolate: 0
   m_Constraints: 0
   m_CollisionDetection: 0
+--- !u!1 &9071641831146162312 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: 454619da3eb16524aa212a083ee0365c, type: 3}
+  m_PrefabInstance: {fileID: 8153094221805893081}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &6469740020296724399
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9071641831146162312}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4dd9cf2f2a7e42c48a5096b6f7f9058d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  piecesParent: {fileID: 8552092159438410290}
+  filterTag: 
+  baseDelay: 3
+  randomJitter: 0.3
+  randomizeOrder: 1
+  pieceTweenDuration: 0.25
+  useLeanTween: 1
+  scaleDown: 1
+  fadeOut: 0
+  enablePhysics: 1
+  pushForce: 0.5
+  explosionForce: 15
+  explosionRadius: 1.5
+  extraTorque: {x: 0, y: 45, z: 0}
+  shatterSfx: {fileID: 0}
+  sfxVolume: 0.8
+  breakOnStart: 1
+  onBreakStarted:
+    m_PersistentCalls:
+      m_Calls: []
+  onAllPiecesDestroyed:
+    m_PersistentCalls:
+      m_Calls: []
 --- !u!1 &9115986429367979454 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 1128123826090358887, guid: 454619da3eb16524aa212a083ee0365c, type: 3}

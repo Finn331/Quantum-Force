@@ -973,6 +973,9 @@ MonoBehaviour:
   shieldAmount: 100000
   currentHealth: 0
   currentShield: 0
+  normalDoor: {fileID: 0}
+  rageMinDuration: 1.2
+  shieldLock: 0
 --- !u!114 &858943920046379636
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -985,7 +988,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5890fdf64f390414bb1e5dbe4986e4aa, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  uniqueID: dd7a5b40-e9b9-4c51-b10e-f985a0997cdc
+  uniqueID: 507808ea-8d6c-415d-8945-ae1251625cba
   _name: Pulzar
   health: 0
   shield: 0

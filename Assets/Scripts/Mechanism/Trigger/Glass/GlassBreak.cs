@@ -3,26 +3,49 @@ using UnityEngine;
 
 public class GlassBreak : MonoBehaviour
 {
-    //Script Reference
+    public enum DetectionMode
+    {
+        TriggerOnly,
+        CollisionOnly,
+        Both
+    }
+
+    [Header("Glass Setting")]
+    [SerializeField] private string tagToBreak;     // untuk trigger
+    [SerializeField] private string collisionTag; // untuk collision
+    [SerializeField] private DetectionMode detectionMode = DetectionMode.Both;
+
+    // Script Reference
     private Crate crate;
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
+
     void Start()
     {
         crate = GetComponent<Crate>();
+        if (crate == null)
+        {
+            Debug.LogError("GlassBreak membutuhkan komponen Crate pada GameObject ini.");
+        }
     }
 
-    // Update is called once per frame
-    void Update()
-    {
-        
-    }
     private void OnTriggerEnter(Collider other)
     {
-        // Cek apakah objek yang masuk memiliki tag "Player"
-        if (other.CompareTag("Player"))
-        {            
-            crate.Die();
+        if (detectionMode == DetectionMode.TriggerOnly || detectionMode == DetectionMode.Both)
+        {
+            if (other.CompareTag(tagToBreak))
+            {
+                crate.Die();
+            }
+        }
+    }
+
+    private void OnCollisionEnter(Collision collision)
+    {
+        if (detectionMode == DetectionMode.CollisionOnly || detectionMode == DetectionMode.Both)
+        {
+            if (collision.gameObject.CompareTag(collisionTag))
+            {
+                crate.Die();
+            }
         }
     }
 }
-

@@ -17,6 +17,8 @@ TagManager:
   - Wall
   - Void
   - Ball
+  - CannonAmmo
+  - GlassDoor
   layers:
   - Default
   - TransparentFX

@@ -76,9 +76,19 @@ public class Lift : MonoBehaviour
             LeanTween.alphaCanvas(blurCanvasGroup, 1f, fadeDuration).setEase(LeanTweenType.linear);
         }
         yield return new WaitForSeconds(fadeDuration);
-        
 
-        playerMovementRef.TeleportPlayer(teleportPoint.position, transform.rotation);            
+        // --- HITUNG ROTASI MENGHADAP PINTU ---
+        Quaternion faceDoorRotation = teleportPoint.rotation; // default: arah spawn point
+        if (liftDoorDestination != null)
+        {
+            Vector3 toDoor = liftDoorDestination.transform.position - teleportPoint.position;
+            toDoor.y = 0f; // hanya arah horizontal
+            if (toDoor.sqrMagnitude > 0.0001f)
+                faceDoorRotation = Quaternion.LookRotation(toDoor.normalized, Vector3.up);
+        }
+
+        // Teleport + set arah menghadap pintu (gunakan fungsi PlayerMovement)
+        playerMovementRef.TeleportPlayer(teleportPoint.position, faceDoorRotation);
 
         if (liftUI != null) liftUI.SetActive(true);
 
@@ -91,9 +101,10 @@ public class Lift : MonoBehaviour
             LeanTween.alphaCanvas(blurCanvasGroup, 0f, fadeDuration).setEase(LeanTweenType.linear).setOnComplete(() =>
             {
                 liftUIBlur.SetActive(false);
-                liftUI.SetActive(false);
+                if (liftUI != null) liftUI.SetActive(false);
+
                 if (liftDoorDestination != null)
-                    LeanTween.moveY(liftDoorDestination, liftDoorPosY, 0.5f).setEase(LeanTweenType.easeInOutQuad);                
+                    LeanTween.moveY(liftDoorDestination, liftDoorPosY, 0.5f).setEase(LeanTweenType.easeInOutQuad);
             });
         }
         yield return new WaitForSeconds(fadeDuration);
