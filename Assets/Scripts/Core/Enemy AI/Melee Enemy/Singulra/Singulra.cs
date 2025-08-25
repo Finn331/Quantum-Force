@@ -2,19 +2,33 @@ using UnityEngine;
 using UnityEngine.AI;
 using cowsins;
 using System.Collections;
+using System.Linq;
 
 public class Singulra : MonoBehaviour
 {
-    // State Machine Enum
-    private enum AIState { Wandering, Chasing, Attacking, Raging, Stunned, Phase1_VulnerableShield, Phase2_WaypointShield, Phase3_WreckingBallShield, Dead }
+    private enum AIState
+    {
+        Wandering,
+        Chasing,
+        Attacking,
+        Raging,
+        Stunned,
+        Phase1_VulnerableShield,
+        Phase2_WaypointShield,
+        Dead
+    }
     private AIState currentState;
 
-    [Header("Core Components")]
+    private enum Phase2Sub { None, A, B }
+    private Phase2Sub currentPhase2 = Phase2Sub.None;
+
     private NavMeshAgent agent;
     private Animator animator;
     private EnemyHealth enemyHealth;
     private AudioSource audioSource;
     private Collider enemyCollider;
+
+    [Header("Target")]
     public Transform player;
 
     [Header("Phase Settings (Health Thresholds)")]
@@ -22,8 +36,8 @@ public class Singulra : MonoBehaviour
     private const float phase1_Threshold = 1250f;
     private const float phase2a_Threshold = 1000f;
     private const float phase2b_Threshold = 750f;
-    private const float phase3_Threshold = 500f;
-    private bool phase1Triggered, phase2aTriggered, phase2bTriggered, phase3Triggered;
+
+    private bool phase1Triggered, phase2aTriggered, phase2bTriggered;
 
     [Header("Wandering & Phase Waypoints")]
     public Transform[] wanderWaypoints;
@@ -41,8 +55,7 @@ public class Singulra : MonoBehaviour
     public LayerMask visionBlockLayer;
     public float detectionRange = 20f;
     public float attackRange = 3f;
-    [Range(0, 360)]
-    public float fieldOfViewAngle = 120f;
+    [Range(0, 360)] public float fieldOfViewAngle = 120f;
     public float eyeHeight = 1.5f;
 
     [Header("Stun Settings")]
@@ -53,6 +66,28 @@ public class Singulra : MonoBehaviour
     public float attackCooldown = 2f;
     private float lastAttackTime;
     private bool wasProvoked = false;
+
+    [Header("Attack Movement Tuning")]
+    [Tooltip("Distance to ENTER attack (slightly smaller than stoppingDistance so it stops quickly).")]
+    public float attackEnterDistance = 2.6f;
+    [Tooltip("Distance to EXIT attack (slightly larger than stoppingDistance to avoid flip-flop).")]
+    public float attackExitDistance = 3.4f;
+    [Tooltip("Tiny halt when entering Attack to ensure feet plant before anim trigger.")]
+    public float attackEnterHaltTime = 0.05f;
+
+    [Header("Instant Attack On Sight")]
+    [Tooltip("If player is visible and distance <= this value, do instant attack.")]
+    public float instantAttackDistance = 2.8f;
+    public enum AttackChoice { Attack, Attack2, Random }
+
+    [Tooltip("Default instant attack outside special phases.")]
+    public AttackChoice defaultAttack = AttackChoice.Attack;
+    [Tooltip("Instant attack during Phase1 (Vulnerable Shield).")]
+    public AttackChoice phase1Attack = AttackChoice.Attack;
+    [Tooltip("Instant attack during Phase2 (Waypoint Shield).")]
+    public AttackChoice phase2Attack = AttackChoice.Attack2;
+    [Tooltip("Instant attack when enraged (low HP).")]
+    public AttackChoice enragedAttack = AttackChoice.Random;
 
     [Header("Rage Mode Settings")]
     private bool isEnraged = false;
@@ -75,9 +110,14 @@ public class Singulra : MonoBehaviour
     private float shieldBreakTimer = 0f;
     private const float SHIELD_BREAK_DELAY = 5f;
 
+    [Header("Phase2 Modular Break (Collision)")]
+    public string[] phase2a_BreakTags;
+    public string[] phase2b_BreakTags;
+    public bool destroyProjectileOnHit = true;
+    public LayerMask phase2ProjectileLayerFilter = 0;
+
     private Vector3 lastPlayerPos;
 
-    #region Unity Lifecycle & Setup
     private void Awake()
     {
         agent = GetComponent<NavMeshAgent>();
@@ -86,35 +126,43 @@ public class Singulra : MonoBehaviour
         enemyCollider = GetComponent<Collider>();
         audioSource = GetComponent<AudioSource>();
         if (audioSource == null) audioSource = gameObject.AddComponent<AudioSource>();
-    }
-
-    void Start()
-    {
-        currentState = AIState.Wandering;
-        enemyHealth.health = maxHealth;
-        enemyHealth.shield = 0;
-        if (shieldVFX != null) shieldVFX.SetActive(false);
         audioSource.spatialBlend = 1f;
         audioSource.playOnAwake = false;
         audioSource.volume = sfxVolume;
+
+        agent.updateRotation = true;
+    }
+
+    private void Start()
+    {
+        currentState = AIState.Wandering;
+
+        enemyHealth.health = maxHealth;
+        enemyHealth.shield = 0;
+        if (shieldVFX != null) shieldVFX.SetActive(false);
+
         agent.speed = walkSpeed;
         agent.angularSpeed = angularSpeed;
         agent.acceleration = acceleration;
         agent.stoppingDistance = attackRange;
 
-        if (wanderWaypoints.Length > 0)
-        {
+        if (wanderWaypoints != null && wanderWaypoints.Length > 0)
             agent.SetDestination(wanderWaypoints[currentWanderWaypointIndex].position);
-        }
     }
 
-    void Update()
+    private void Update()
     {
         if (player == null || currentState == AIState.Dead) return;
 
         if (currentState == AIState.Wandering || currentState == AIState.Chasing || currentState == AIState.Attacking)
-        {
             CheckPhaseTriggers();
+
+        if (currentState == AIState.Wandering || currentState == AIState.Chasing)
+        {
+            float speedMag = agent.desiredVelocity.magnitude;
+            animator.SetBool("isRunning", speedMag > 0.1f && !agent.isStopped);
+            animator.SetBool("isWalking", speedMag > 0.1f && !agent.isStopped);
+            animator.SetBool("isIdle", speedMag <= 0.1f || agent.isStopped);
         }
 
         switch (currentState)
@@ -122,113 +170,113 @@ public class Singulra : MonoBehaviour
             case AIState.Stunned: break;
             case AIState.Phase1_VulnerableShield: HandlePhase1Shield(); break;
             case AIState.Phase2_WaypointShield: HandlePhase2Shield(); break;
-            case AIState.Phase3_WreckingBallShield: HandlePhase3Shield(); break;
+            case AIState.Raging: break;
             case AIState.Wandering: Wander(); DetectPlayer(); break;
-            case AIState.Chasing: Chase(); break;
+            case AIState.Chasing: Chase(); DetectPlayer(); break;
             case AIState.Attacking: Attack(); break;
         }
 
         lastPlayerPos = player.position;
     }
-    #endregion
 
-    #region Stun Collision
     private void OnTriggerEnter(Collider other)
     {
-        //if (other.CompareTag("FallenObject") && currentState != AIState.Dead && currentState != AIState.Stunned)
-        //{
-        //    StartCoroutine(GetStunned());
-        //}
-
         if (other.gameObject.CompareTag("FallenObject") && currentState != AIState.Dead && currentState != AIState.Stunned)
-        {
-            // Jika terkena objek jatuh, langsung masuk ke state Stunned
             StartCoroutine(GetStunned());
-        }
-
     }
 
-
-    // --- FUNGSI STUN DIPERBAIKI ---
-    IEnumerator GetStunned()
+    private IEnumerator GetStunned()
     {
-        Debug.Log("Singulra terkena STUN!");
-        AIState stateBeforeStun = currentState;
+        AIState prev = currentState;
         currentState = AIState.Stunned;
 
-        agent.isStopped = true;
-        agent.velocity = Vector3.zero;
+        StopAgentHard();
 
-        // Matikan semua animasi gerak lalu picu animasi stun
         ResetAllAnimationStates();
         animator.SetTrigger("stunned");
 
         yield return new WaitForSeconds(stunDuration);
 
-        Debug.Log("Stun selesai, kembali ke state sebelumnya.");
-        currentState = stateBeforeStun;
+        currentState = prev;
         if (currentState != AIState.Dead) agent.isStopped = false;
     }
-    #endregion
 
-    #region Phase Mechanics
-    void CheckPhaseTriggers()
+    private void CheckPhaseTriggers()
     {
         float currentHP = enemyHealth.health;
 
         if (!isEnraged && currentHP <= maxHealth * ENRAGE_THRESHOLD)
-        {
             ActivateEnrageMode();
-        }
 
-        if (currentHP <= phase3_Threshold && !phase3Triggered) StartCoroutine(EnterPhase(AIState.Phase3_WreckingBallShield));
-        else if (currentHP <= phase2b_Threshold && !phase2bTriggered) StartCoroutine(EnterPhase(AIState.Phase2_WaypointShield, phase2b_Waypoint, "2b"));
-        else if (currentHP <= phase2a_Threshold && !phase2aTriggered) StartCoroutine(EnterPhase(AIState.Phase2_WaypointShield, phase2a_Waypoint, "2a"));
-        else if (currentHP <= phase1_Threshold && !phase1Triggered) StartCoroutine(EnterPhase(AIState.Phase1_VulnerableShield));
+        if (currentHP <= phase2b_Threshold && !phase2bTriggered)
+        {
+            StartCoroutine(EnterPhase_Phase2(Phase2Sub.B, phase2b_Waypoint));
+        }
+        else if (currentHP <= phase2a_Threshold && !phase2aTriggered)
+        {
+            StartCoroutine(EnterPhase_Phase2(Phase2Sub.A, phase2a_Waypoint));
+        }
+        else if (currentHP <= phase1_Threshold && !phase1Triggered)
+        {
+            StartCoroutine(EnterPhase_Phase1());
+        }
     }
 
-    void ActivateEnrageMode()
+    private void ActivateEnrageMode()
     {
         isEnraged = true;
         chaseSpeed = rageChaseSpeed;
         meleeDamage = rageMeleeDamage;
-        //PlaySFX(rageSFX);
         Debug.Log("ENRAGE MODE ACTIVATED!");
     }
 
-    IEnumerator EnterPhase(AIState nextPhase, Transform waypoint = null, string phaseIdentifier = "")
+    private IEnumerator EnterPhase_Phase1()
     {
         currentState = AIState.Raging;
-        agent.isStopped = true;
+        StopAgentHard();
+
         ResetAllAnimationStates();
         animator.SetBool("isRage", true);
         PlaySFX(rageSFX);
+
         yield return new WaitForSeconds(2.0f);
+
         animator.SetBool("isRage", false);
-        switch (nextPhase)
-        {
-            case AIState.Phase1_VulnerableShield: ActivatePhase1Shield(); break;
-            case AIState.Phase2_WaypointShield:
-                if (phaseIdentifier == "2a") ActivatePhase2Shield(waypoint, ref phase2aTriggered);
-                else if (phaseIdentifier == "2b") ActivatePhase2Shield(waypoint, ref phase2bTriggered);
-                break;
-            case AIState.Phase3_WreckingBallShield: ActivatePhase3Shield(); break;
-        }
+        ActivatePhase1Shield();
     }
 
-    void ActivatePhase1Shield()
+    private IEnumerator EnterPhase_Phase2(Phase2Sub which, Transform waypoint)
+    {
+        currentState = AIState.Raging;
+        StopAgentHard();
+
+        ResetAllAnimationStates();
+        animator.SetBool("isRage", true);
+        PlaySFX(rageSFX);
+
+        yield return new WaitForSeconds(2.0f);
+
+        animator.SetBool("isRage", false);
+        ActivatePhase2Shield(which, waypoint);
+    }
+
+    private void ActivatePhase1Shield()
     {
         phase1Triggered = true;
         currentState = AIState.Phase1_VulnerableShield;
+        currentPhase2 = Phase2Sub.None;
+
         ActivateShieldVisuals();
+
         agent.isStopped = true;
         SetAnimationState(false, false, true);
         shieldBreakTimer = 0f;
     }
 
-    void HandlePhase1Shield()
+    private void HandlePhase1Shield()
     {
         bool playerIsMoving = Vector3.Distance(player.position, lastPlayerPos) > 0.01f;
+
         if (playerIsMoving)
         {
             agent.isStopped = false;
@@ -241,22 +289,26 @@ public class Singulra : MonoBehaviour
         {
             agent.isStopped = true;
             SetAnimationState(false, false, true);
+
             if (agent.velocity.magnitude < 0.1f)
             {
                 shieldBreakTimer += Time.deltaTime;
                 if (shieldBreakTimer >= SHIELD_BREAK_DELAY)
-                {
                     BreakShield();
-                }
             }
         }
     }
 
-    void ActivatePhase2Shield(Transform waypoint, ref bool triggerFlag)
+    private void ActivatePhase2Shield(Phase2Sub which, Transform waypoint)
     {
-        triggerFlag = true;
+        if (which == Phase2Sub.A) phase2aTriggered = true;
+        else if (which == Phase2Sub.B) phase2bTriggered = true;
+
         currentState = AIState.Phase2_WaypointShield;
+        currentPhase2 = which;
+
         ActivateShieldVisuals();
+
         if (waypoint != null)
         {
             agent.isStopped = false;
@@ -266,54 +318,77 @@ public class Singulra : MonoBehaviour
         else
         {
             agent.isStopped = true;
+            SetAnimationState(false, false, true);
         }
     }
 
-    void HandlePhase2Shield()
+    private void HandlePhase2Shield()
     {
-        if (!agent.pathPending && agent.remainingDistance < agent.stoppingDistance)
+        if (!agent.pathPending && agent.remainingDistance <= agent.stoppingDistance)
         {
             agent.isStopped = true;
             SetAnimationState(false, false, true);
         }
         else
         {
+            agent.isStopped = false;
             SetAnimationState(true, false, false);
         }
     }
 
-    void ActivatePhase3Shield()
+    public void BreakPhase2Shield()
     {
-        phase3Triggered = true;
-        currentState = AIState.Phase3_WreckingBallShield;
-        ActivateShieldVisuals();
-        agent.isStopped = true;
+        if (currentState == AIState.Phase2_WaypointShield) BreakShield();
     }
 
-    void HandlePhase3Shield()
+    private void OnCollisionEnter(Collision collision)
     {
-        agent.isStopped = true;
-        SetAnimationState(false, false, true);
+        if (currentState != AIState.Phase2_WaypointShield || enemyHealth.shield <= 0) return;
+
+        if (phase2ProjectileLayerFilter.value != 0)
+        {
+            int bit = 1 << collision.gameObject.layer;
+            if ((phase2ProjectileLayerFilter.value & bit) == 0) return;
+        }
+
+        string tagHit = collision.gameObject.tag;
+
+        bool canBreak = false;
+        if (currentPhase2 == Phase2Sub.A && phase2a_BreakTags != null && phase2a_BreakTags.Length > 0)
+            canBreak = phase2a_BreakTags.Contains(tagHit);
+        else if (currentPhase2 == Phase2Sub.B && phase2b_BreakTags != null && phase2b_BreakTags.Length > 0)
+            canBreak = phase2b_BreakTags.Contains(tagHit);
+
+        if (canBreak)
+        {
+            BreakShield();
+            if (destroyProjectileOnHit) Destroy(collision.gameObject);
+        }
     }
-    #endregion
 
-    #region Public Event Functions
-    public void BreakPhase2Shield() { if (currentState == AIState.Phase2_WaypointShield) BreakShield(); }
-    public void BreakPhase3ShieldByWreckingBall() { if (currentState == AIState.Phase3_WreckingBallShield) BreakShield(); }
-    #endregion
-
-    #region Standard AI Behavior
-    void DetectPlayer()
+    // Instant attack when target is in sight
+    private void DetectPlayer()
     {
-        if (wasProvoked || player == null) return;
+        if (player == null) return;
+
         float distanceToPlayer = Vector3.Distance(transform.position, player.position);
         if (distanceToPlayer > detectionRange) return;
 
-        Vector3 directionToPlayer = (player.position - transform.position).normalized;
-        if (Vector3.Angle(transform.forward, directionToPlayer) < fieldOfViewAngle / 2)
+        Vector3 dir = (player.position - transform.position).normalized;
+        if (Vector3.Angle(transform.forward, dir) >= fieldOfViewAngle / 2) return;
+
+        Vector3 eyePosition = transform.position + Vector3.up * eyeHeight;
+
+        if (!Physics.Raycast(eyePosition, dir, distanceToPlayer, visionBlockLayer))
         {
-            Vector3 eyePosition = transform.position + Vector3.up * eyeHeight;
-            if (!Physics.Raycast(eyePosition, directionToPlayer, distanceToPlayer, visionBlockLayer))
+            if (distanceToPlayer <= instantAttackDistance)
+            {
+                TriggerInstantAttackByPhase();
+                wasProvoked = true;
+                return;
+            }
+
+            if (!wasProvoked)
             {
                 wasProvoked = true;
                 StartCoroutine(TriggerInitialRage());
@@ -321,56 +396,133 @@ public class Singulra : MonoBehaviour
         }
     }
 
-    IEnumerator TriggerInitialRage()
+    private void TriggerInstantAttackByPhase()
+    {
+        currentState = AIState.Attacking;
+        StopAgentHard();
+        FacePlayerInstant();
+
+        AttackChoice choice = defaultAttack;
+        if (isEnraged) choice = enragedAttack;
+        else if (currentState == AIState.Phase1_VulnerableShield) choice = phase1Attack;
+        else if (currentState == AIState.Attacking && (phase1Triggered || phase2aTriggered || phase2bTriggered))
+        {
+            if (phase2aTriggered || phase2bTriggered) choice = phase2Attack;
+        }
+
+        DoAttackTrigger(choice);
+        lastAttackTime = Time.time;
+    }
+
+    private void DoAttackTrigger(AttackChoice choice)
+    {
+        switch (choice)
+        {
+            case AttackChoice.Attack: animator.SetTrigger("attack"); break;
+            case AttackChoice.Attack2: animator.SetTrigger("attack2"); break;
+            case AttackChoice.Random:
+                if (Random.value < 0.5f) animator.SetTrigger("attack");
+                else animator.SetTrigger("attack2");
+                break;
+        }
+
+        animator.SetBool("isRunning", false);
+        animator.SetBool("isWalking", false);
+        animator.SetBool("isIdle", false);
+    }
+
+    private void FacePlayerInstant()
+    {
+        Vector3 toPlayer = player.position - transform.position;
+        toPlayer.y = 0f;
+        if (toPlayer.sqrMagnitude > 0.001f)
+        {
+            transform.rotation = Quaternion.LookRotation(toPlayer.normalized, Vector3.up);
+        }
+    }
+
+    private IEnumerator TriggerInitialRage()
     {
         currentState = AIState.Raging;
-        agent.isStopped = true;
+        StopAgentHard();
+
         ResetAllAnimationStates();
         animator.SetBool("isRage", true);
         PlaySFX(rageSFX);
+
         yield return new WaitForSeconds(2.0f);
+
         animator.SetBool("isRage", false);
         currentState = AIState.Chasing;
         agent.isStopped = false;
     }
 
-    void Wander()
+    private void Wander()
     {
         agent.speed = walkSpeed;
-        if (wanderWaypoints.Length == 0)
+
+        if (wanderWaypoints == null || wanderWaypoints.Length == 0)
         {
             agent.isStopped = true;
             SetAnimationState(false, false, true);
             return;
         }
-        if (!agent.pathPending && agent.remainingDistance < agent.stoppingDistance)
+
+        if (!agent.pathPending && agent.remainingDistance <= agent.stoppingDistance)
         {
             currentWanderWaypointIndex = (currentWanderWaypointIndex + 1) % wanderWaypoints.Length;
             agent.SetDestination(wanderWaypoints[currentWanderWaypointIndex].position);
         }
+
         SetAnimationState(true, false, false);
     }
 
-    void Chase()
+    private void Chase()
     {
         agent.speed = chaseSpeed;
         agent.isStopped = false;
         agent.SetDestination(player.position);
-        SetAnimationState(false, true, false);
 
-        if (Vector3.Distance(transform.position, player.position) <= agent.stoppingDistance)
+        float dist = Vector3.Distance(transform.position, player.position);
+        if (dist <= attackEnterDistance)
         {
-            currentState = AIState.Attacking;
+            SwitchToAttack();
+            return;
         }
+
+        SetAnimationState(false, true, false);
     }
 
-    void Attack()
+    private void SwitchToAttack()
     {
-        agent.isStopped = true;
-        Vector3 direction = (player.position - transform.position).normalized;
-        Quaternion lookRotation = Quaternion.LookRotation(new Vector3(direction.x, 0, direction.z));
-        transform.rotation = Quaternion.Slerp(transform.rotation, lookRotation, Time.deltaTime * 5f);
-        SetAnimationState(false, false, false);
+        currentState = AIState.Attacking;
+        StopAgentHard();
+        animator.SetBool("isRunning", false);
+        animator.SetBool("isWalking", false);
+        animator.SetBool("isIdle", false);
+        if (attackEnterHaltTime > 0f) StartCoroutine(HaltThenPrimeAttack());
+    }
+
+    private IEnumerator HaltThenPrimeAttack()
+    {
+        yield return new WaitForSeconds(attackEnterHaltTime);
+    }
+
+    private void Attack()
+    {
+        agent.updateRotation = false;
+
+        Vector3 toPlayer = (player.position - transform.position);
+        toPlayer.y = 0f;
+        if (toPlayer.sqrMagnitude > 0.001f)
+        {
+            Quaternion face = Quaternion.LookRotation(toPlayer.normalized, Vector3.up);
+            transform.rotation = Quaternion.Slerp(transform.rotation, face, Time.deltaTime * 10f);
+        }
+
+        animator.SetBool("isRunning", false);
+        animator.SetBool("isWalking", false);
+        animator.SetBool("isIdle", false);
 
         if (Time.time - lastAttackTime >= attackCooldown)
         {
@@ -378,15 +530,9 @@ public class Singulra : MonoBehaviour
 
             if (isEnraged)
             {
-                int attackChoice = Random.Range(0, 2);
-                if (attackChoice == 0)
-                {
-                    animator.SetTrigger("attack");
-                }
-                else
-                {
-                    animator.SetTrigger("attack2");
-                }
+                int choice = Random.Range(0, 2);
+                if (choice == 0) animator.SetTrigger("attack");
+                else animator.SetTrigger("attack2");
             }
             else
             {
@@ -394,14 +540,21 @@ public class Singulra : MonoBehaviour
             }
         }
 
-        if (Vector3.Distance(transform.position, player.position) > agent.stoppingDistance)
+        float dist = Vector3.Distance(transform.position, player.position);
+        if (dist > attackExitDistance)
         {
+            agent.updateRotation = true;
             currentState = AIState.Chasing;
         }
     }
-    #endregion
 
-    #region Damage, Death & SFX
+    private void StopAgentHard()
+    {
+        agent.isStopped = true;
+        agent.ResetPath();
+        agent.velocity = Vector3.zero;
+    }
+
     public void OnTakeDamage()
     {
         if (currentState == AIState.Wandering && !wasProvoked)
@@ -414,20 +567,19 @@ public class Singulra : MonoBehaviour
 
     public void Die()
     {
-        if (currentState == AIState.Phase2_WaypointShield || currentState == AIState.Phase3_WreckingBallShield)
-        {
-            BreakShield();
-        }
+        if (currentState == AIState.Phase2_WaypointShield) BreakShield();
         DieTrigger();
     }
 
     private void DieTrigger()
     {
         currentState = AIState.Dead;
-        agent.isStopped = true;
+        StopAgentHard();
+
         ResetAllAnimationStates();
         animator.SetBool("isDie", true);
         PlaySFX(deathSFX);
+
         if (enemyCollider != null) enemyCollider.enabled = false;
         Destroy(gameObject, 3f);
     }
@@ -435,6 +587,7 @@ public class Singulra : MonoBehaviour
     public void DealMeleeDamage()
     {
         if (currentState != AIState.Attacking || enemyHealth.shield > 0) return;
+
         if (Vector3.Distance(transform.position, player.position) <= attackRange)
         {
             Debug.Log("Player terkena serangan melee sebesar " + meleeDamage + " damage!");
@@ -444,33 +597,36 @@ public class Singulra : MonoBehaviour
     public void PlayRageSFX() { PlaySFX(rageSFX); }
     public void PlayAttackSFX()
     {
-        if (attackSFX.Length == 0) return;
-        AudioClip clip = attackSFX[Random.Range(0, attackSFX.Length)];
+        if (attackSFX == null || attackSFX.Length == 0) return;
+        var clip = attackSFX[Random.Range(0, attackSFX.Length)];
         PlaySFX(clip);
     }
 
     private void PlaySFX(AudioClip clip)
     {
-        //if (clip != null && audioSource != null) audioSource.PlayOneShot(clip, sfxVolume);
-        if (clip != null && audioSource != null) SoundManager.Instance.PlaySound(clip, 0f, 0f, true, 0f);
+        if (clip != null)
+        {
+            SoundManager.Instance.PlaySound(clip, 0f, 0f, true, 0f);
+        }
     }
-    #endregion
 
-    #region Utility & Animation
-    void ActivateShieldVisuals()
+    private void ActivateShieldVisuals()
     {
         enemyHealth.shield = shieldAmount;
         if (shieldVFX != null) shieldVFX.SetActive(true);
         PlaySFX(shieldUpSFX);
     }
 
-    void BreakShield()
+    private void BreakShield()
     {
         enemyHealth.shield = 0;
         if (shieldVFX != null) shieldVFX.SetActive(false);
         PlaySFX(shieldDownSFX);
+
         currentState = AIState.Chasing;
+        currentPhase2 = Phase2Sub.None;
         agent.isStopped = false;
+        agent.updateRotation = true;
     }
 
     private void SetAnimationState(bool isWalking, bool isRunning, bool isIdle)
@@ -486,18 +642,23 @@ public class Singulra : MonoBehaviour
         animator.SetBool("isRage", false);
         animator.ResetTrigger("attack");
         animator.ResetTrigger("attack2");
-        animator.ResetTrigger("stunned"); // Reset trigger stun untuk jaga-jaga
+        animator.ResetTrigger("stunned");
     }
-    #endregion
 
     private void OnDrawGizmosSelected()
     {
         Gizmos.color = Color.yellow;
         Gizmos.DrawWireSphere(transform.position, detectionRange);
-        Vector3 fovLine1 = Quaternion.AngleAxis(fieldOfViewAngle / 2, transform.up) * transform.forward * detectionRange;
-        Vector3 fovLine2 = Quaternion.AngleAxis(-fieldOfViewAngle / 2, transform.up) * transform.forward * detectionRange;
-        Gizmos.color = Color.cyan;
-        Gizmos.DrawRay(transform.position, fovLine1);
-        Gizmos.DrawRay(transform.position, fovLine2);
+        Gizmos.color = Color.red;
+        Gizmos.DrawWireSphere(transform.position, attackRange);
+
+        if (player != null)
+        {
+            Vector3 fov1 = Quaternion.AngleAxis(fieldOfViewAngle / 2, transform.up) * transform.forward * detectionRange;
+            Vector3 fov2 = Quaternion.AngleAxis(-fieldOfViewAngle / 2, transform.up) * transform.forward * detectionRange;
+            Gizmos.color = Color.cyan;
+            Gizmos.DrawRay(transform.position, fov1);
+            Gizmos.DrawRay(transform.position, fov2);
+        }
     }
 }
