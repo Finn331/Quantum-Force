@@ -12,10 +12,6 @@ public class Catapult : MonoBehaviour
     [Tooltip("Object to be throw and it can be automatically choose or manualy.")]
     public Rigidbody objectToLaunch;
 
-    // Variabel armCollider tidak lagi diperlukan dari Inspector
-    // [Tooltip("Collider dari lengan katapel untuk diabaikan saat melontar.")]
-    // public Collider armCollider; 
-
     [Header("Throw Settings")]
     [Tooltip("Throw force, this value can be splitted by the mass of the object.")]
     public float launchForce = 5000f;
@@ -24,11 +20,8 @@ public class Catapult : MonoBehaviour
     public float launchAngle = 45f;
 
     [Header("Arm Animation")]
-    [Tooltip("Arm first position (a ready position to launch)")]
     public float startAngle = -45f;
-    [Tooltip("Arm final position (a position after throwing an object)")]
     public float endAngle = 45f;
-    [Tooltip("Arm speed Animation when launching/throwing an object")]
     public float animationSpeed = 5f;
 
     private bool isLaunching = false;
@@ -39,11 +32,26 @@ public class Catapult : MonoBehaviour
     [Header("Player Reference")]
     [SerializeField] PickupSystem pickupSystem;
 
+    // --- SFX ---
+    [Header("SFX")]
+    [SerializeField] private AudioClip loadSFX;
+    [SerializeField] private AudioClip launchSFX;
+    [Range(0f, 1f)][SerializeField] private float sfxVolume = 1f;
+
+    private AudioSource audioSource;
+
     private void Start()
     {
         startRotation = Quaternion.Euler(startAngle, 0, 0);
         endRotation = Quaternion.Euler(endAngle, 0, 0);
         if (arm != null) arm.localRotation = startRotation;
+
+        // Setup AudioSource
+        audioSource = GetComponent<AudioSource>();
+        if (audioSource == null) audioSource = gameObject.AddComponent<AudioSource>();
+        audioSource.playOnAwake = false;
+        audioSource.spatialBlend = 1f; // 3D sound
+        audioSource.volume = sfxVolume;
     }
 
     private void LateUpdate()
@@ -59,28 +67,26 @@ public class Catapult : MonoBehaviour
     {
         pickupSystem.ThrowObject();
 
-        // Cek dulu apakah objek yang masuk memiliki komponen Interactable
         Interactable interactableObject = other.GetComponent<Interactable>();
-        if (interactableObject == null) return; // Jika bukan interactable, abaikan
+        if (interactableObject == null) return;
 
-        // Jika katapel masih kosong, baru proses objeknya
         if (objectToLaunch == null)
         {
             Rigidbody rb = other.GetComponent<Rigidbody>();
             if (rb != null)
             {
-                // Simpan referensi Rigidbody-nya
                 objectToLaunch = rb;
 
-                // Nonaktifkan skrip Interactable agar tidak bisa diambil lagi oleh pemain
                 interactableObject.enabled = false;
 
-                // Lakukan operasi fisika pada Rigidbody
                 objectToLaunch.isKinematic = true;
                 objectToLaunch.transform.position = launchPoint.position;
                 objectToLaunch.transform.rotation = launchPoint.rotation;
 
-                Debug.Log(other.name + " ditempatkan di katapel. Script Interactable dinonaktifkan.");
+                Debug.Log(other.name + " ditempatkan di katapel.");
+
+                // mainkan SFX load
+                PlaySFX(loadSFX);
             }
         }
     }
@@ -122,12 +128,8 @@ public class Catapult : MonoBehaviour
             objectToLaunch.isKinematic = false;
 
             Collider objectCollider = objectToLaunch.GetComponent<Collider>();
-
-            // --- PERBAIKAN UTAMA DI SINI ---
-            // Dapatkan SEMUA collider dari lengan dan anak-anaknya
             Collider[] allArmColliders = arm.GetComponentsInChildren<Collider>();
 
-            // Abaikan tabrakan antara proyektil dan semua bagian lengan
             if (objectCollider != null && allArmColliders.Length > 0)
             {
                 foreach (Collider armPartCollider in allArmColliders)
@@ -140,8 +142,10 @@ public class Catapult : MonoBehaviour
             float effectiveForce = launchForce / objectToLaunch.mass;
             objectToLaunch.AddForce(launchDirection * effectiveForce, ForceMode.Impulse);
 
-            // Setelah beberapa saat, aktifkan kembali tabrakannya
             StartCoroutine(ReenableCollision(objectCollider, allArmColliders, 1.0f));
+
+            // mainkan SFX launch
+            PlaySFX(launchSFX);
 
             objectToLaunch = null;
         }
@@ -159,7 +163,6 @@ public class Catapult : MonoBehaviour
         isLaunching = false;
     }
 
-    // Coroutine diperbarui untuk menerima array of colliders
     private IEnumerator ReenableCollision(Collider objCol, Collider[] armCols, float delay)
     {
         yield return new WaitForSeconds(delay);
@@ -167,11 +170,16 @@ public class Catapult : MonoBehaviour
         {
             foreach (Collider armCol in armCols)
             {
-                if (armCol != null) // Cek null untuk keamanan
-                {
-                    Physics.IgnoreCollision(objCol, armCol, false);
-                }
+                if (armCol != null) Physics.IgnoreCollision(objCol, armCol, false);
             }
+        }
+    }
+
+    private void PlaySFX(AudioClip clip)
+    {
+        if (clip != null && audioSource != null)
+        {
+            audioSource.PlayOneShot(clip, sfxVolume);
         }
     }
 }

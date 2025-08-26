@@ -84,7 +84,7 @@ MonoBehaviour:
   cannonBallSpawnPoint: {fileID: 1036314661859391174}
   cannonBallPrefab: {fileID: 6458163022525134431, guid: 7bcc8cbd5504fb84a82929eeaca7f43c, type: 3}
   fireVFX: {fileID: 0}
-  fireSFX: {fileID: 0}
+  fireSFX: {fileID: 8300000, guid: 07c64b81039c58147aff19b26efcff4a, type: 3}
 --- !u!65 &4666278808812096401
 BoxCollider:
   m_ObjectHideFlags: 0

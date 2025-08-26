@@ -72,47 +72,62 @@ namespace cowsins
 
         public GameObject GetFromPool(GameObject prefab, Vector3 position, Quaternion rotation, float returnToPool)
         {
-            if (prefab == null)
-            {
-                return null;
-            }
-            if (!poolDictionary.ContainsKey(prefab))
-            {
-                // Default size if not preregistered
-                RegisterPool(prefab, defaultSize);
-            }
+            if (prefab == null) return null;
 
+            if (!poolDictionary.ContainsKey(prefab))
+                RegisterPool(prefab, defaultSize);
+
+            // Pastikan ada stok
             if (poolDictionary[prefab].Count == 0)
                 ExpandPool(prefab);
 
             GameObject obj = poolDictionary[prefab].Dequeue();
-            Transform objTransform = obj.transform;
-            objTransform.SetParent(null);
-            objTransform.position = position;
-            objTransform.rotation = rotation;
-            objTransform.SetParent(this.transform);
+
+            // <<— Tambahan: kalau entry-nya sudah hancur, buat yang baru
+            while (obj == null) // Unity "fake null" juga dianggap null di perbandingan ini
+            {
+                if (poolDictionary[prefab].Count == 0) ExpandPool(prefab);
+                obj = poolDictionary[prefab].Dequeue();
+            }
+
+            // Aman: sekarang obj pasti valid
+            var t = obj.transform;
+            t.SetParent(null, false);
+            t.SetPositionAndRotation(position, rotation);
+            t.SetParent(this.transform, true);
             obj.SetActive(true);
 
             if (activeObjects.ContainsKey(prefab))
                 activeObjects[prefab].Add(obj);
 
-            // VFX if applicable + auto return logic
             HandleVFXAutoReturn(obj, prefab, returnToPool);
-
             return obj;
         }
+
 
         public void ReturnToPool(GameObject obj, GameObject prefab)
         {
             if (obj == null) return;
 
+            // Lepas dari parent dinamis (mis. enemy) agar tidak ikut ter-Destroy
+            obj.transform.SetParent(this.transform, true);
+
+            // Bersihkan efek yang menempel
+            var ps = obj.GetComponent<ParticleSystem>();
+            if (ps) { ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear); }
+
+            var tr = obj.GetComponent<TrailRenderer>();
+            if (tr) { tr.Clear(); }
+
             obj.SetActive(false);
+
             if (poolDictionary.ContainsKey(prefab))
                 poolDictionary[prefab].Enqueue(obj);
 
             if (activeObjects.ContainsKey(prefab))
                 activeObjects[prefab].Remove(obj);
         }
+
 
         private void ExpandPool(GameObject prefab)
         {
@@ -123,19 +138,23 @@ namespace cowsins
 
         private void HandleVFXAutoReturn(GameObject obj, GameObject prefab, float returnToPool)
         {
-            ParticleSystem ps = obj.GetComponent<ParticleSystem>();
+            var ps = obj.GetComponent<ParticleSystem>();
             if (ps != null)
             {
+                // Cegah auto-destroy
+                var main = ps.main;
+                main.stopAction = ParticleSystemStopAction.None;
+
                 ps.Play();
-                // Automatically return to pool after VFX duration
-                if (returnToPool > 0) StartCoroutine(ReturnAfterDelay(obj, prefab, ps.main.duration));
+                if (returnToPool > 0f)
+                    StartCoroutine(ReturnAfterDelay(obj, prefab, Mathf.Max(main.duration, returnToPool)));
+                return;
             }
-            else
-            {
-                // If it's not a VFX, use a default delay
-                if (returnToPool > 0) StartCoroutine(ReturnAfterDelay(obj, prefab, returnToPool));
-            }
+
+            if (returnToPool > 0f)
+                StartCoroutine(ReturnAfterDelay(obj, prefab, returnToPool));
         }
+
 
         private IEnumerator ReturnAfterDelay(GameObject obj, GameObject prefab, float delay)
         {

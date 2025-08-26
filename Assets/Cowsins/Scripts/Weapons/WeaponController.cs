@@ -602,9 +602,13 @@ namespace cowsins
 
             if (h.collider != null && impactBullet != null)
             {
-                impactBullet.transform.rotation = Quaternion.LookRotation(h.normal);
-                impactBullet.transform.SetParent(h.collider.transform);
+                var t = impactBullet.transform;
+                t.SetParent(PoolManager.Instance.transform, true); // atau null
+                t.SetPositionAndRotation(h.point, Quaternion.LookRotation(h.normal));
+                // jangan parent ke collider yang mungkin akan di-Destroy
             }
+
+
 
             // Apply damage
             if (!damageTarget)

@@ -7156,7 +7156,7 @@ MonoBehaviour:
   explosionForce: 15
   explosionRadius: 1.5
   extraTorque: {x: 0, y: 45, z: 0}
-  shatterSfx: {fileID: 0}
+  shatterSfx: {fileID: 8300000, guid: 7ffdb44337c1153429235ffbd2b995d5, type: 3}
   sfxVolume: 0.8
   breakOnStart: 1
   onBreakStarted:

@@ -404,6 +404,9 @@ MonoBehaviour:
   endAngle: -72
   animationSpeed: 5
   pickupSystem: {fileID: 0}
+  loadSFX: {fileID: 0}
+  launchSFX: {fileID: 0}
+  sfxVolume: 1
 --- !u!4 &1872418624728879634 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 534f0aae8e15fc84e970c2b46ce68597, type: 3}
@@ -461,7 +464,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: daf2d590ebbc0d344a161bf10dd0c2de, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  uniqueID: 61decf00-8578-442b-afb6-5db4db859c7f
+  uniqueID: f9f3874f-418b-4664-a9d8-abed86f9bd26
   interactable: 0
   interactText: PRESS E TO INTERACT
   instantInteraction: 0

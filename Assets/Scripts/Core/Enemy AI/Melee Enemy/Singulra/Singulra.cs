@@ -64,15 +64,10 @@ public class Singulra : MonoBehaviour
     public float stunDuration = 3f;
 
     [Header("Melee Hit (Ray/SphereCast)")]
-    [Tooltip("Transform asal cast (mis. empty di tangan). Jika kosong, pakai hitOriginLocal.")]
     public Transform hitOrigin;
-    [Tooltip("Origin lokal jika hitOrigin null.")]
     public Vector3 hitOriginLocal = new Vector3(0f, 1.2f, 0.25f);
-    [Tooltip("Radius SphereCast. 0.25–0.35 untuk human melee.")]
     public float hitRadius = 0.3f;
-    [Tooltip("Panjang jangkauan pukulan.")]
     public float hitLength = 1.4f;
-    [Tooltip("Layer yang bisa kena pukulan (isi Player).")]
     public LayerMask hitMask = ~0;
 
     [Header("Serang & Cooldown")]
@@ -87,9 +82,7 @@ public class Singulra : MonoBehaviour
     public float attackEnterHaltTime = 0.05f;
 
     [Header("Sync Distances With Hit")]
-    [Tooltip("Jika ON, jarak attack otomatis mengikuti hitLength.")]
     public bool syncAttackDistancesToHitLength = true;
-    [Tooltip("Offset untuk attackExitDistance (lebih besar sedikit agar anti flip-flop).")]
     public float exitExtra = 0.6f;
 
     [Header("Instant Attack On Sight")]
@@ -132,6 +125,9 @@ public class Singulra : MonoBehaviour
     public LayerMask phase2ProjectileLayerFilter = 0;
 
     private Vector3 lastPlayerPos;
+
+    // === Aggro-after-shield support ===
+    private bool pendingChaseAfterShield = false;
 
     private void Awake()
     {
@@ -198,6 +194,12 @@ public class Singulra : MonoBehaviour
             animator.SetBool("isRunning", speedMag > 0.1f && !agent.isStopped);
             animator.SetBool("isWalking", speedMag > 0.1f && !agent.isStopped);
             animator.SetBool("isIdle", speedMag <= 0.1f || agent.isStopped);
+        }
+
+        // Saat shield phase, kalau sudah diprovokasi, tetap menghadap ke player.
+        if (wasProvoked && (currentState == AIState.Phase1_VulnerableShield || currentState == AIState.Phase2_WaypointShield))
+        {
+            FacePlayerInstant();
         }
 
         if (!agent.isStopped && (currentState == AIState.Wandering || currentState == AIState.Chasing || currentState == AIState.Phase2_WaypointShield))
@@ -476,6 +478,7 @@ public class Singulra : MonoBehaviour
 
     private void FacePlayerInstant()
     {
+        if (player == null) return;
         Vector3 toPlayer = player.position - transform.position;
         toPlayer.y = 0f;
         if (toPlayer.sqrMagnitude > 0.001f)
@@ -496,6 +499,12 @@ public class Singulra : MonoBehaviour
         animator.SetBool("isRage", false);
         currentState = AIState.Chasing;
         agent.isStopped = false;
+
+        if (pendingChaseAfterShield)
+        {
+            pendingChaseAfterShield = false;
+            if (player != null) agent.SetDestination(player.position);
+        }
     }
 
     private void Wander()
@@ -523,7 +532,7 @@ public class Singulra : MonoBehaviour
     {
         agent.speed = chaseSpeed;
         agent.isStopped = false;
-        agent.SetDestination(player.position);
+        if (player != null) agent.SetDestination(player.position);
 
         float dist = Vector3.Distance(transform.position, player.position);
         if (dist <= attackEnterDistance)
@@ -552,11 +561,14 @@ public class Singulra : MonoBehaviour
 
     private void Attack()
     {
-        Vector3 toPlayer = player.position - transform.position; toPlayer.y = 0f;
-        if (toPlayer.sqrMagnitude > 0.001f)
+        if (player != null)
         {
-            Quaternion face = Quaternion.LookRotation(toPlayer.normalized, Vector3.up);
-            transform.rotation = Quaternion.Slerp(transform.rotation, face, Time.deltaTime * attackTurnSpeed);
+            Vector3 toPlayer = player.position - transform.position; toPlayer.y = 0f;
+            if (toPlayer.sqrMagnitude > 0.001f)
+            {
+                Quaternion face = Quaternion.LookRotation(toPlayer.normalized, Vector3.up);
+                transform.rotation = Quaternion.Slerp(transform.rotation, face, Time.deltaTime * attackTurnSpeed);
+            }
         }
 
         animator.SetBool("isRunning", false);
@@ -578,7 +590,7 @@ public class Singulra : MonoBehaviour
             }
         }
 
-        float dist = Vector3.Distance(transform.position, player.position);
+        float dist = player != null ? Vector3.Distance(transform.position, player.position) : Mathf.Infinity;
         if (dist > attackExitDistance)
         {
             currentState = AIState.Chasing;
@@ -592,14 +604,47 @@ public class Singulra : MonoBehaviour
         agent.velocity = Vector3.zero;
     }
 
+    // ===================== PROVOKE ON DAMAGE =====================
+
+    // Panggil dari sistem health musuh saat menerima damage umum
     public void OnTakeDamage()
     {
-        if (currentState == AIState.Wandering && !wasProvoked)
-        {
-            wasProvoked = true;
-            StartCoroutine(TriggerInitialRageOnce());
-        }
+        // Aggro instan apapun state-nya
+        ImmediateAggro(null);
+
         PlaySFX(hurtSFX);
+    }
+
+    // Panggil dari projectile: peluru meneruskan transform penembak (player)
+    public void OnHitByProjectile(Transform attacker)
+    {
+        ImmediateAggro(attacker);
+    }
+
+    private void ImmediateAggro(Transform attackerOrNull)
+    {
+        if (currentState == AIState.Dead) return;
+
+        if (attackerOrNull != null) player = attackerOrNull;
+
+        wasProvoked = true;
+
+        // Bila sedang shield/rage/stun, tunda kejar sampai fase selesai,
+        // tapi tetap menghadap ke player agar terasa responsif.
+        if (currentState == AIState.Phase1_VulnerableShield ||
+            currentState == AIState.Phase2_WaypointShield ||
+            currentState == AIState.Raging ||
+            currentState == AIState.Stunned)
+        {
+            pendingChaseAfterShield = true;
+            FacePlayerInstant();
+            return;
+        }
+
+        // Jika tidak terkunci fase, langsung kejar
+        currentState = AIState.Chasing;
+        agent.isStopped = false;
+        if (player != null) agent.SetDestination(player.position);
     }
 
     public void Die()
@@ -639,7 +684,6 @@ public class Singulra : MonoBehaviour
         {
             var h = hits[i];
 
-            // Hanya damage player
             if (h.collider.transform == player || h.collider.CompareTag("Player"))
             {
                 var stats = h.collider.GetComponent<PlayerStats>();
@@ -683,6 +727,13 @@ public class Singulra : MonoBehaviour
         currentState = AIState.Chasing;
         currentPhase2 = Phase2Sub.None;
         agent.isStopped = false;
+
+        // Jika ada aggro tertunda, langsung kejar
+        if (pendingChaseAfterShield)
+        {
+            pendingChaseAfterShield = false;
+            if (player != null) agent.SetDestination(player.position);
+        }
     }
 
     private void SetAnimationState(bool isWalking, bool isRunning, bool isIdle)
@@ -704,20 +755,17 @@ public class Singulra : MonoBehaviour
 
     private void OnDrawGizmosSelected()
     {
-        // Detection/attack range
         Gizmos.color = Color.yellow;
         Gizmos.DrawWireSphere(transform.position, detectionRange);
         Gizmos.color = Color.red;
         Gizmos.DrawWireSphere(transform.position, attackRange);
 
-        // Melee cast gizmos
         Gizmos.color = Color.magenta;
         Vector3 origin = hitOrigin != null ? hitOrigin.position
                                            : Application.isPlaying ? transform.TransformPoint(hitOriginLocal)
                                                                    : transform.TransformPoint(hitOriginLocal);
         Vector3 end = origin + transform.forward * hitLength;
         Gizmos.DrawLine(origin, end);
-        // start & end spheres
         Gizmos.DrawWireSphere(origin, hitRadius);
         Gizmos.DrawWireSphere(end, hitRadius);
 
