@@ -126,7 +126,7 @@ public class Singulra : MonoBehaviour
 
     private Vector3 lastPlayerPos;
 
-    // === Aggro-after-shield support ===
+    // Aggro-after-shield support
     private bool pendingChaseAfterShield = false;
 
     private void Awake()
@@ -196,8 +196,8 @@ public class Singulra : MonoBehaviour
             animator.SetBool("isIdle", speedMag <= 0.1f || agent.isStopped);
         }
 
-        // Saat shield phase, kalau sudah diprovokasi, tetap menghadap ke player.
-        if (wasProvoked && (currentState == AIState.Phase1_VulnerableShield || currentState == AIState.Phase2_WaypointShield))
+        // HANYA saat Phase1 dan sedang diam, baru tengok player.
+        if (wasProvoked && currentState == AIState.Phase1_VulnerableShield && agent.isStopped)
         {
             FacePlayerInstant();
         }
@@ -374,7 +374,7 @@ public class Singulra : MonoBehaviour
         {
             agent.isStopped = false;
             SetAnimationState(true, false, false);
-            AlignToVelocity();
+            AlignToVelocity(); // rotasi ke arah path
         }
     }
 
@@ -478,6 +478,9 @@ public class Singulra : MonoBehaviour
 
     private void FacePlayerInstant()
     {
+        // Jangan digunakan saat Phase2 waypoint shield agar tidak melawan arah path
+        if (currentState == AIState.Phase2_WaypointShield) return;
+
         if (player == null) return;
         Vector3 toPlayer = player.position - transform.position;
         toPlayer.y = 0f;
@@ -606,16 +609,12 @@ public class Singulra : MonoBehaviour
 
     // ===================== PROVOKE ON DAMAGE =====================
 
-    // Panggil dari sistem health musuh saat menerima damage umum
     public void OnTakeDamage()
     {
-        // Aggro instan apapun state-nya
         ImmediateAggro(null);
-
         PlaySFX(hurtSFX);
     }
 
-    // Panggil dari projectile: peluru meneruskan transform penembak (player)
     public void OnHitByProjectile(Transform attacker)
     {
         ImmediateAggro(attacker);
@@ -629,19 +628,16 @@ public class Singulra : MonoBehaviour
 
         wasProvoked = true;
 
-        // Bila sedang shield/rage/stun, tunda kejar sampai fase selesai,
-        // tapi tetap menghadap ke player agar terasa responsif.
         if (currentState == AIState.Phase1_VulnerableShield ||
             currentState == AIState.Phase2_WaypointShield ||
             currentState == AIState.Raging ||
             currentState == AIState.Stunned)
         {
             pendingChaseAfterShield = true;
-            FacePlayerInstant();
+            FacePlayerInstant(); // tak akan memutar saat Phase2 berkat guard
             return;
         }
 
-        // Jika tidak terkunci fase, langsung kejar
         currentState = AIState.Chasing;
         agent.isStopped = false;
         if (player != null) agent.SetDestination(player.position);
@@ -668,7 +664,6 @@ public class Singulra : MonoBehaviour
     }
 
     // ===================== DAMAGE DENGAN SPHERECAST =====================
-    // Panggil via Animation Event pada frame hit
     public void DealMeleeDamage()
     {
         if (currentState != AIState.Attacking || enemyHealth.shield > 0) return;
@@ -728,7 +723,6 @@ public class Singulra : MonoBehaviour
         currentPhase2 = Phase2Sub.None;
         agent.isStopped = false;
 
-        // Jika ada aggro tertunda, langsung kejar
         if (pendingChaseAfterShield)
         {
             pendingChaseAfterShield = false;

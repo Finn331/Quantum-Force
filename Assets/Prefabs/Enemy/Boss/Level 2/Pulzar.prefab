@@ -960,8 +960,9 @@ MonoBehaviour:
   obstacleLayerMask:
     serializedVersion: 2
     m_Bits: 270336
-  fieldOfView: 120
   detectionRange: 15
+  fieldOfView: 120
+  eyeHeight: 1.5
   attackRange: 2
   meleeDamage: 20
   attackCooldown: 2
@@ -972,6 +973,16 @@ MonoBehaviour:
   sfxVolume: 1
   shieldVFX: {fileID: 0}
   shieldAmount: 100000
+  stareHoldTime: 3
+  faceAngleDeg: 20
+  requireLineOfSight: 1
+  enemyStillSpeed: 0.05
+  playerStillMove: 0.02
+  trapLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  trapTags: []
+  ignoreTrapSeconds: 1
   currentHealth: 0
   currentShield: 0
   normalDoor: {fileID: 0}
@@ -989,7 +1000,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5890fdf64f390414bb1e5dbe4986e4aa, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  uniqueID: 727aa96c-229b-491f-8f36-c31093ab685d
+  uniqueID: f8aa93aa-0edd-46cd-9e88-afaa06ccd2e4
   _name: Pulzar
   health: 0
   shield: 0

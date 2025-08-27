@@ -41,7 +41,7 @@ MonoBehaviour:
   reloadTime: 3
   coolSpeed: 1
   cooledPercentageAfterOverheat: 0
-  infiniteBullets: 1
+  infiniteBullets: 0
   magazineSize: 4
   bulletsPerFire: 8
   ammoCostPerFire: 1

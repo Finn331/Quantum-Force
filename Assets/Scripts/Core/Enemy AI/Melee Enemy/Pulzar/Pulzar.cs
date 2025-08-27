@@ -5,38 +5,45 @@ using System.Collections;
 
 public class Pulzar : MonoBehaviour
 {
-    // State Machine
+    // ======== STATE ========
     private enum AIState { Wandering, Chasing, Attacking, Raging, VulnerableShield, IndestructibleShield, Dead }
     private AIState currentState;
 
+    // ======== WAYPOINT ========
     [Header("Waypoint Settings")]
     public Transform[] waypoints;
     private int currentWaypointIndex = 0;
-
     [Tooltip("Waypoint tujuan saat HP mencapai 100 (fase perisai terakhir).")]
     public Transform finalPhaseWaypoint;
 
+    // ======== NAV ========
     [Header("Navigation & Movement Feel")]
     private NavMeshAgent agent;
     public float walkSpeed = 3f;
     public float chaseSpeed = 5f;
-    [Tooltip("Semakin rendah, belok makin halus.")]
     public float angularSpeed = 240f;
-    [Tooltip("Semakin rendah, akselerasi makin halus.")]
     public float acceleration = 12f;
 
-    [Header("Player Detection")]
+    // ======== PLAYER DETECTION (RAYCAST) ========
+    [Header("Player Detection (Raycast)")]
     public Transform player;
+    [Tooltip("Layer yang menghalangi LOS (tembok/dll).")]
     public LayerMask obstacleLayerMask;
-    public float fieldOfView = 120f;
+    [Tooltip("Jarak deteksi maksimum.")]
     public float detectionRange = 15f;
-    public float attackRange = 2f;
+    [Tooltip("Field-of-view derajat.")]
+    [Range(0f, 360f)] public float fieldOfView = 120f;
+    [Tooltip("Tinggi 'mata' untuk raycast.")]
+    public float eyeHeight = 1.5f;
 
+    // ======== ATTACK ========
     [Header("Attack Settings")]
+    public float attackRange = 2f;
     public float meleeDamage = 20f;
     public float attackCooldown = 2f;
     private float lastAttackTime;
 
+    // ======== COMBAT / SFX ========
     [Header("Combat Awareness")]
     private bool wasProvoked = false;
 
@@ -47,6 +54,7 @@ public class Pulzar : MonoBehaviour
     public AudioClip deathSFX;
     public float sfxVolume = 1f;
 
+    // ======== SHIELD ========
     [Header("Shield Settings")]
     [Tooltip("VFX perisai (nyala saat shield aktif).")]
     public GameObject shieldVFX;
@@ -55,8 +63,30 @@ public class Pulzar : MonoBehaviour
 
     // Trigger per-phase HP
     private bool shieldTriggeredAt250, shieldTriggeredAt200, shieldTriggeredAt150, indestructibleShieldTriggered;
-    private float shieldBreakTimer = 0f;
+    private float shieldBreakTimer = 0f; // dipakai untuk fase-1 (stare timer)
 
+    [Header("Fase-1: Pecah Shield dengan Saling Menatap & Diam")]
+    [Tooltip("Durasi saling menatap & diam agar shield fase-1 pecah.")]
+    public float stareHoldTime = 3f;
+    [Tooltip("Ambang sudut hadap (deg) untuk dianggap saling menatap.")]
+    public float faceAngleDeg = 20f;
+    [Tooltip("Wajib LOS jelas?")]
+    public bool requireLineOfSight = true;
+    [Tooltip("Maks. kecepatan NavMesh agar musuh dianggap diam.")]
+    public float enemyStillSpeed = 0.05f;
+    [Tooltip("Ambang pergeseran posisi per frame agar player dianggap diam.")]
+    public float playerStillMove = 0.02f;
+
+    // ======== ANTI GANGGUAN (RAGE x SARANG/TRAP) ========
+    [Header("Anti Gangguan saat Rage")]
+    [Tooltip("Layer perangkap/sarang yang ingin diabaikan kontaknya saat RAGE.")]
+    public LayerMask trapLayers;
+    [Tooltip("Tag perangkap yang ingin di-IgnoreCollision ketika menyentuh saat RAGE/SHEILD.")]
+    public string[] trapTags;
+    [Tooltip("Durasi kita mengabaikan collider perangkap ketika bersentuhan (detik).")]
+    public float ignoreTrapSeconds = 1.0f;
+
+    // ======== DEBUG ========
     [Header("Stats (debug)")]
     [SerializeField] float currentHealth;
     [SerializeField] float currentShield;
@@ -64,40 +94,41 @@ public class Pulzar : MonoBehaviour
     [Header("Script Reference")]
     [SerializeField] NormalDoor normalDoor;
 
-    // --- RAGE LOCK ---
+    // ======== RAGE LOCK ========
     [Header("Rage Lock")]
-    [SerializeField] private float rageMinDuration = 1.2f; // durasi minimal anim rage
-    private bool rageAnimating = false;   // sedang memainkan anim rage
-    private bool rageLocked = false;      // kunci state saat rage berjalan
+    [SerializeField] private float rageMinDuration = 1.2f;
+    private bool rageAnimating = false;
+    private bool rageLocked = false;
 
-    // --- SHIELD LOCK UTILS ---
-    [Tooltip("Mengunci shield agar tidak bisa turun saat fase tertentu (mis. rage).")]
-    [SerializeField] private bool shieldLock = false;
-
-    // refs
+    // ======== INTERNALS ========
     private EnemyHealth enemyHealth;
     private Animator animator;
     private Vector3 lastPlayerPos;
-    private Vector3 lastEnemyPos;
     private Collider enemyCollider;
     private AudioSource audioSource;
+    private Rigidbody rb;
+
+    [SerializeField] private bool shieldLock = false;  // true = kebal mutlak (kunci manual)
+    private float healthAtIndestructible = -1f;
 
     private bool IsInShieldState => currentState == AIState.VulnerableShield || currentState == AIState.IndestructibleShield;
     private bool IsBusy => currentState == AIState.Dead || rageAnimating || rageLocked;
 
+    // ========= LIFECYCLE =========
     private void Awake()
     {
         agent = GetComponent<NavMeshAgent>();
         animator = GetComponent<Animator>();
         enemyHealth = GetComponent<EnemyHealth>();
         enemyCollider = GetComponent<Collider>();
+        rb = GetComponent<Rigidbody>();
+
         audioSource = GetComponent<AudioSource>();
         if (audioSource == null) audioSource = gameObject.AddComponent<AudioSource>();
         audioSource.spatialBlend = 1f;
         audioSource.playOnAwake = false;
         audioSource.volume = sfxVolume;
 
-        // agent setup
         agent.updateRotation = true;
         agent.updateUpAxis = true;
     }
@@ -106,14 +137,15 @@ public class Pulzar : MonoBehaviour
     {
         currentState = AIState.Wandering;
 
-        // pastikan awalnya shield mati
+        // awal: shield mati
         SetShieldActive(false, false);
 
         agent.speed = walkSpeed;
         agent.angularSpeed = angularSpeed;
         agent.acceleration = acceleration;
 
-        if (waypoints.Length > 0) agent.SetDestination(waypoints[currentWaypointIndex].position);
+        if (waypoints != null && waypoints.Length > 0)
+            agent.SetDestination(waypoints[0].position);
     }
 
     void Update()
@@ -122,19 +154,25 @@ public class Pulzar : MonoBehaviour
         currentShield = enemyHealth.shield;
         if (player == null || currentState == AIState.Dead) return;
 
-        // Jaga shield ketika lock ON (mis. saat rage): pastikan nilainya tidak drop
-        if (shieldLock && enemyHealth.shield < shieldAmount)
+        // Pastikan shield tetap penuh saat terkunci
+        if (shieldLock)
         {
-            enemyHealth.shield = shieldAmount;
+            if (enemyHealth.shield < shieldAmount) enemyHealth.shield = shieldAmount;
             if (shieldVFX != null && !shieldVFX.activeSelf) shieldVFX.SetActive(true);
         }
 
-        // Shield triggers hanya saat TIDAK rage & bukan sedang vulnerable shield
-        if (!rageAnimating && !rageLocked && currentState != AIState.VulnerableShield)
+        // “God mode” HP saat indestructible
+        if (currentState == AIState.IndestructibleShield)
         {
-            CheckShieldTriggers();
+            if (healthAtIndestructible < 0f) healthAtIndestructible = enemyHealth.health;
+            if (enemyHealth.health < healthAtIndestructible) enemyHealth.health = healthAtIndestructible;
         }
 
+        // Cek trigger fase (kecuali sedang di vulnerable agar tidak saling tindih)
+        if (!rageAnimating && !rageLocked && currentState != AIState.VulnerableShield)
+            CheckShieldTriggers();
+
+        // AI logic
         switch (currentState)
         {
             case AIState.VulnerableShield:
@@ -151,24 +189,26 @@ public class Pulzar : MonoBehaviour
 
             case AIState.Wandering:
                 Wander();
-                DetectPlayer(); // boleh provoke dari wander
+                DetectPlayer_Raycast();
                 break;
 
             case AIState.Chasing:
-                if (!rageAnimating && !rageLocked && !IsInShieldState) Chase();
+                if (!IsBusy && !IsInShieldState)
+                {
+                    DetectPlayer_Raycast(); // tetap update awareness
+                    Chase();
+                }
                 break;
 
             case AIState.Attacking:
-                if (!rageAnimating && !rageLocked && !IsInShieldState) Attack();
+                if (!IsBusy && !IsInShieldState) Attack();
                 break;
         }
 
         lastPlayerPos = player.position;
-        lastEnemyPos = transform.position;
     }
 
-    // ===================== SHIELD =====================
-
+    // ========= SHIELD CORE =========
     void SetShieldActive(bool active, bool lockShield)
     {
         shieldLock = lockShield;
@@ -180,8 +220,8 @@ public class Pulzar : MonoBehaviour
         }
         else
         {
-            shieldLock = false; // selalu lepas lock saat mematikan shield
-            enemyHealth.shield = 0;
+            shieldLock = false;
+            enemyHealth.shield = 0f;
             if (shieldVFX != null) shieldVFX.SetActive(false);
         }
     }
@@ -189,25 +229,27 @@ public class Pulzar : MonoBehaviour
     void CheckShieldTriggers()
     {
         float hp = enemyHealth.health;
+
+        // Fase-1 (kini kebal terkunci, pecah hanya via tatap-diam)
         if (hp <= 250 && !shieldTriggeredAt250) ActivateVulnerableShield(ref shieldTriggeredAt250);
         else if (hp <= 200 && !shieldTriggeredAt200) ActivateVulnerableShield(ref shieldTriggeredAt200);
         else if (hp <= 150 && !shieldTriggeredAt150) ActivateVulnerableShield(ref shieldTriggeredAt150);
+        // Fase terakhir
         else if (hp <= 100 && !indestructibleShieldTriggered) ActivateIndestructibleShield();
     }
 
-    void ActivateVulnerableShield(ref bool triggerFlag)
+    void ActivateVulnerableShield(ref bool trigFlag)
     {
-        triggerFlag = true;
+        trigFlag = true;
         currentState = AIState.VulnerableShield;
 
-        // aktifkan shield TANPA lock (boleh pecah oleh kondisi "diam 5 detik")
-        SetShieldActive(true, false);
+        // Kunci shield (benar-benar kebal)
+        SetShieldActive(true, true);
 
-        agent.isStopped = true;
-        agent.velocity = Vector3.zero;
-
-        SetAnimationState(isWalking: false, isIdle: true);
+        agent.isStopped = false; // tetap bisa bergerak mengejar saat player bergerak
+        agent.speed = chaseSpeed;
         shieldBreakTimer = 0f;
+        SetAnimationState(true, false);
     }
 
     void ActivateIndestructibleShield()
@@ -215,20 +257,20 @@ public class Pulzar : MonoBehaviour
         indestructibleShieldTriggered = true;
         currentState = AIState.IndestructibleShield;
 
-        // aktifkan shield TANPA lock (tetap aktif selama fase ini)
-        SetShieldActive(true, false);
+        SetShieldActive(true, true);
+        healthAtIndestructible = enemyHealth.health;
 
         if (finalPhaseWaypoint != null)
         {
             agent.isStopped = false;
             agent.speed = walkSpeed;
             agent.SetDestination(finalPhaseWaypoint.position);
-            SetAnimationState(isWalking: true, isIdle: false);
+            SetAnimationState(true, false);
         }
         else
         {
             agent.isStopped = true;
-            SetAnimationState(isWalking: false, isIdle: true);
+            SetAnimationState(false, true);
         }
     }
 
@@ -249,81 +291,109 @@ public class Pulzar : MonoBehaviour
         else
         {
             agent.isStopped = false;
+            agent.speed = walkSpeed;
+            agent.SetDestination(finalPhaseWaypoint.position);
             SetAnimationState(true, false);
         }
     }
 
     void HandleVulnerableShield()
     {
-        // Saat shield vuln, player yang diam 5 detik => shield pecah
-        bool playerIsMoving = Vector3.Distance(player.position, lastPlayerPos) > 0.01f;
+        if (player == null) return;
 
-        if (playerIsMoving)
+        float dist = Vector3.Distance(transform.position, player.position);
+        bool enemyStill = agent.velocity.magnitude <= enemyStillSpeed || agent.isStopped;
+        bool playerStill = Vector3.Distance(player.position, lastPlayerPos) <= playerStillMove;
+        bool facingEachOther = IsFacingEachOther(faceAngleDeg);
+        bool losOK = !requireLineOfSight || HasClearLOS();
+
+        // Jika player bergerak → kejar sambil shield tetap kebal
+        if (!playerStill)
         {
-            float dist = Vector3.Distance(transform.position, player.position);
-            if (dist > attackRange)
-            {
-                agent.isStopped = false;
-                agent.speed = chaseSpeed;
-                agent.SetDestination(player.position);
-                SetAnimationState(true, false);
-            }
-            else
-            {
-                agent.isStopped = true;
-                SetAnimationState(false, true);
-            }
+            agent.isStopped = false;
+            agent.speed = chaseSpeed;
+            agent.SetDestination(player.position);
+            SetAnimationState(true, false);
             shieldBreakTimer = 0f;
+            return;
         }
-        else
+
+        // Player diam: bila cukup dekat → berhenti & menatap
+        if (dist <= attackRange * 1.25f)
         {
             agent.isStopped = true;
             SetAnimationState(false, true);
 
-            if (agent.velocity.magnitude < 0.1f)
+            // putar menghadap player
+            Vector3 dir = player.position - transform.position;
+            dir.y = 0f;
+            if (dir.sqrMagnitude > 0.001f)
+            {
+                Quaternion look = Quaternion.LookRotation(dir.normalized, Vector3.up);
+                transform.rotation = Quaternion.Slerp(transform.rotation, look, Time.deltaTime * 5f);
+            }
+
+            if (enemyStill && facingEachOther && losOK)
             {
                 shieldBreakTimer += Time.deltaTime;
-                if (shieldBreakTimer >= 5f)
+                if (shieldBreakTimer >= stareHoldTime)
                 {
-                    // pecahkan shield
-                    SetShieldActive(false, false);
-                    shieldBreakTimer = 0f;
-
-                    currentState = AIState.Chasing;
-                    agent.isStopped = false;
+                    BreakVulnerableShield();
+                    return;
                 }
             }
             else shieldBreakTimer = 0f;
         }
+        else
+        {
+            // Jauh tapi player diam → dekati pelan
+            agent.isStopped = false;
+            agent.speed = walkSpeed;
+            agent.SetDestination(player.position);
+            SetAnimationState(true, false);
+            shieldBreakTimer = 0f;
+        }
     }
 
-    // ===================== PERSEPSI =====================
+    void BreakVulnerableShield()
+    {
+        SetShieldActive(false, false);         // lepas kunci & matikan shield
+        currentState = AIState.Chasing;        // lanjut lawan
+        agent.isStopped = false;
+        agent.speed = chaseSpeed;
+        if (player != null) agent.SetDestination(player.position);
+        shieldBreakTimer = 0f;
+    }
 
-    void DetectPlayer()
+    // ========= DETECT (RAYCAST) =========
+    void DetectPlayer_Raycast()
     {
         if (player == null || wasProvoked) return;
 
-        float distanceToPlayer = Vector3.Distance(transform.position, player.position);
-        if (distanceToPlayer > detectionRange) return;
+        Vector3 origin = transform.position + Vector3.up * eyeHeight;
+        Vector3 target = player.position + Vector3.up * eyeHeight;
+        Vector3 toPlayer = target - origin;
+        float dist = toPlayer.magnitude;
+        if (dist > detectionRange) return;
 
-        Vector3 dir = (player.position - transform.position).normalized;
-        if (Vector3.Angle(transform.forward, dir) > fieldOfView / 2) return;
+        Vector3 dir = toPlayer / (dist > 0.0001f ? dist : 1f);
 
-        Vector3 rayOrigin = transform.position + Vector3.up * 0.5f;
+        // Cek FOV
+        float angle = Vector3.Angle(transform.forward, dir);
+        if (angle > fieldOfView * 0.5f) return;
 
-        // Jika TIDAK menabrak obstacle = LOS jelas
-        if (!Physics.Raycast(rayOrigin, dir, distanceToPlayer, obstacleLayerMask))
+        // Cek LOS (tidak menabrak obstacle)
+        if (Physics.Raycast(origin, dir, dist, obstacleLayerMask)) return;
+
+        // sukses deteksi
+        if (!IsInShieldState && !rageAnimating && !rageLocked)
         {
-            // Jangan provoke bila dalam shield/rage
-            if (IsInShieldState || rageAnimating || rageLocked) return;
-
-            wasProvoked = true; // set dulu agar tidak dobel
+            wasProvoked = true;
             StartCoroutine(TriggerRage());
         }
     }
 
-    // ===================== RAGE =====================
-
+    // ========= RAGE =========
     IEnumerator TriggerRage()
     {
         if (rageAnimating || rageLocked || currentState == AIState.Raging) yield break;
@@ -332,8 +402,9 @@ public class Pulzar : MonoBehaviour
         rageAnimating = true;
         rageLocked = true;
 
-        // Saat saling menatap (rage), AKTIFKAN SHIELD & KUNCI agar tidak bisa diserang
-        SetShieldActive(true, true);
+        // Lindungi anim dari gangguan fisika
+        SetShieldActive(true, true); // aman dari damage
+        if (rb != null) rb.isKinematic = true; // cegah impulse dari "sarang"
 
         agent.isStopped = true;
         agent.velocity = Vector3.zero;
@@ -343,30 +414,29 @@ public class Pulzar : MonoBehaviour
         animator.SetBool("isRage", true);
         PlayRageSFX();
 
-        // Minimal durasi rage agar tidak terpotong damage/event lain
         yield return new WaitForSeconds(rageMinDuration);
 
         animator.SetBool("isRage", false);
 
-        // Lepaskan kunci & matikan shield jika tidak masuk fase shield lain
         rageAnimating = false;
         rageLocked = false;
 
+        // Selesai rage: bila tidak dalam shield state lain → lepas shield
         if (!IsInShieldState) SetShieldActive(false, false);
+        if (rb != null) rb.isKinematic = false;
 
         currentState = AIState.Chasing;
         agent.isStopped = false;
     }
 
-    // ===================== BEHAVIOUR =====================
-
+    // ========= BEHAVIOUR =========
     void Wander()
     {
-        if (IsInShieldState || rageAnimating || rageLocked) return;
+        if (IsInShieldState || IsBusy) return;
 
         agent.speed = walkSpeed;
 
-        if (waypoints.Length == 0)
+        if (waypoints == null || waypoints.Length == 0)
         {
             agent.isStopped = true;
             SetAnimationState(false, true);
@@ -385,7 +455,7 @@ public class Pulzar : MonoBehaviour
 
     void Chase()
     {
-        if (IsInShieldState || rageAnimating || rageLocked) return;
+        if (IsInShieldState || IsBusy) return;
 
         agent.speed = chaseSpeed;
 
@@ -403,22 +473,25 @@ public class Pulzar : MonoBehaviour
 
     void Attack()
     {
-        if (IsInShieldState || rageAnimating || rageLocked)
+        if (IsInShieldState || IsBusy)
         {
-            currentState = AIState.Chasing; // safety fallback
+            currentState = AIState.Chasing;
             return;
         }
 
         agent.isStopped = true;
 
-        // Hadap ke player
-        Vector3 direction = (player.position - transform.position).normalized;
-        Quaternion lookRotation = Quaternion.LookRotation(new Vector3(direction.x, 0, direction.z));
-        transform.rotation = Quaternion.Slerp(transform.rotation, lookRotation, Time.deltaTime * 5f);
+        // hadap player
+        Vector3 direction = (player.position - transform.position); direction.y = 0f;
+        if (direction.sqrMagnitude > 0.001f)
+        {
+            Quaternion lookRotation = Quaternion.LookRotation(direction.normalized, Vector3.up);
+            transform.rotation = Quaternion.Slerp(transform.rotation, lookRotation, Time.deltaTime * 5f);
+        }
 
         SetAnimationState(false, false);
 
-        // Trigger serang by cooldown
+        // serang by cooldown
         if (Time.time - lastAttackTime >= attackCooldown)
         {
             lastAttackTime = Time.time;
@@ -426,18 +499,17 @@ public class Pulzar : MonoBehaviour
             PlayAttackSFX();
         }
 
-        // Keluar dari mode attack jika player kabur
+        // keluar attack jika player kabur
         if (Vector3.Distance(transform.position, player.position) > attackRange)
         {
             currentState = AIState.Chasing;
         }
     }
 
-    // ===================== EVENT / DAMAGE =====================
-
+    // ========= DAMAGE / EVENTS =========
     public void OnTakeDamage()
     {
-        // Saat shield terkunci (rage) atau shield aktif, jangan ubah state (cukup SFX)
+        // Saat shield terkunci atau aktif → abaikan (kebal)
         if (shieldLock || enemyHealth.shield > 0 || rageAnimating || rageLocked)
         {
             if (hurtSFX != null && audioSource != null) audioSource.PlayOneShot(hurtSFX);
@@ -456,11 +528,7 @@ public class Pulzar : MonoBehaviour
 
     public void Die()
     {
-        // Jika mati di fase shield terakhir, matikan shield & VFX
-        if (currentState == AIState.IndestructibleShield || shieldLock || enemyHealth.shield > 0)
-        {
-            SetShieldActive(false, false);
-        }
+        if (IsInShieldState || shieldLock || enemyHealth.shield > 0) SetShieldActive(false, false);
 
         if (normalDoor != null) normalDoor.enabled = true;
         DieTrigger();
@@ -477,6 +545,8 @@ public class Pulzar : MonoBehaviour
             agent.ResetPath();
         }
 
+        if (rb != null) rb.isKinematic = true;
+
         ResetAllAnimationStates();
         animator.SetBool("isDie", true);
         animator.SetTrigger("die");
@@ -490,7 +560,6 @@ public class Pulzar : MonoBehaviour
     // Dipanggil oleh Animation Event pada frame hit
     public void DealMeleeDamage()
     {
-        // Jangan damage bila bukan attacking atau shield aktif (invulnerable phase)
         if (currentState != AIState.Attacking || enemyHealth.shield > 0) return;
 
         if (Vector3.Distance(transform.position, player.position) <= attackRange)
@@ -500,7 +569,10 @@ public class Pulzar : MonoBehaviour
         }
     }
 
-    public void PlayRageSFX() { if (rageSFX != null && audioSource != null) audioSource.PlayOneShot(rageSFX, sfxVolume); }
+    public void PlayRageSFX()
+    {
+        if (rageSFX != null && audioSource != null) audioSource.PlayOneShot(rageSFX, sfxVolume);
+    }
     public void PlayAttackSFX()
     {
         if (attackSFX == null || attackSFX.Length == 0 || audioSource == null) return;
@@ -508,14 +580,40 @@ public class Pulzar : MonoBehaviour
         audioSource.PlayOneShot(clip, sfxVolume);
     }
 
-    // ===================== ANIM / UTILS =====================
+    // ========= HELPER: Facing & LOS =========
+    bool IsFacingEachOther(float maxAngleDeg)
+    {
+        if (player == null) return false;
+
+        Vector3 toPlayer = (player.position - transform.position); toPlayer.y = 0f;
+        Vector3 toEnemy = (transform.position - player.position); toEnemy.y = 0f;
+
+        if (toPlayer.sqrMagnitude < 0.0001f || toEnemy.sqrMagnitude < 0.0001f) return false;
+
+        float a1 = Vector3.Angle(transform.forward, toPlayer.normalized);
+        float a2 = Vector3.Angle(player.forward, toEnemy.normalized);
+
+        return (a1 <= maxAngleDeg) && (a2 <= maxAngleDeg);
+    }
+
+    bool HasClearLOS()
+    {
+        if (player == null) return false;
+        Vector3 origin = transform.position + Vector3.up * eyeHeight;
+        Vector3 target = player.position + Vector3.up * eyeHeight;
+        Vector3 dir = (target - origin);
+        float dist = dir.magnitude;
+        if (dist <= 0.001f) return false;
+        dir /= dist;
+
+        // true jika TIDAK menabrak obstacle
+        return !Physics.Raycast(origin, dir, dist, obstacleLayerMask);
+    }
 
     private void SetAnimationState(bool isWalking, bool isIdle)
     {
         animator.SetBool("isWalking", isWalking);
         animator.SetBool("isIdle", isIdle);
-        // jika punya isRunning di controller-mu, set di sini
-        // animator.SetBool("isRunning", isWalking && agent.speed > walkSpeed);
     }
 
     private void ResetAllAnimationStates()
@@ -526,28 +624,69 @@ public class Pulzar : MonoBehaviour
         animator.ResetTrigger("attack");
     }
 
-    void OnDrawGizmosSelected()
-    {
-        Gizmos.color = Color.yellow;
-        Gizmos.DrawWireSphere(transform.position, detectionRange);
-        Gizmos.color = Color.red;
-        Gizmos.DrawWireSphere(transform.position, attackRange);
-
-        if (player != null)
-        {
-            Vector3 fov1 = Quaternion.AngleAxis(fieldOfView / 2, transform.up) * transform.forward * detectionRange;
-            Vector3 fov2 = Quaternion.AngleAxis(-fieldOfView / 2, transform.up) * transform.forward * detectionRange;
-            Gizmos.color = Color.cyan;
-            Gizmos.DrawRay(transform.position, fov1);
-            Gizmos.DrawRay(transform.position, fov2);
-        }
-    }
-
+    // ========= ANTI GANGGUAN "SARANG" =========
     private void OnCollisionEnter(Collision collision)
     {
+        // Jika sedang rage/ber-shield, abaikan perangkap yang mengganggu anim
+        if ((rageAnimating || shieldLock || enemyHealth.shield > 0) && ShouldTreatAsTrap(collision.gameObject))
+        {
+            if (enemyCollider != null && collision.collider != null)
+                StartCoroutine(TemporarilyIgnoreCollider(collision.collider, enemyCollider, ignoreTrapSeconds));
+        }
+
         if (collision.gameObject.CompareTag("FallenObject"))
         {
             Die();
+        }
+    }
+
+    private void OnTriggerEnter(Collider other)
+    {
+        if ((rageAnimating || shieldLock || enemyHealth.shield > 0) && ShouldTreatAsTrap(other.gameObject))
+        {
+            if (enemyCollider != null)
+                StartCoroutine(TemporarilyIgnoreCollider(other, enemyCollider, ignoreTrapSeconds));
+        }
+    }
+
+    bool ShouldTreatAsTrap(GameObject go)
+    {
+        bool layerMatch = (trapLayers.value == 0) || ((trapLayers.value & (1 << go.layer)) != 0);
+        bool tagMatch = (trapTags == null || trapTags.Length == 0);
+        if (!tagMatch)
+        {
+            for (int i = 0; i < trapTags.Length; i++)
+                if (!string.IsNullOrEmpty(trapTags[i]) && go.CompareTag(trapTags[i])) { tagMatch = true; break; }
+        }
+        return layerMatch || tagMatch;
+    }
+
+    IEnumerator TemporarilyIgnoreCollider(Collider trapCol, Collider selfCol, float seconds)
+    {
+        if (trapCol == null || selfCol == null) yield break;
+        Physics.IgnoreCollision(trapCol, selfCol, true);
+        yield return new WaitForSeconds(seconds);
+        if (trapCol != null && selfCol != null)
+            Physics.IgnoreCollision(trapCol, selfCol, false);
+    }
+
+    // ========= GIZMOS =========
+    void OnDrawGizmosSelected()
+    {
+        // Deteksi
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawWireSphere(transform.position, detectionRange);
+        // Attack
+        Gizmos.color = Color.red;
+        Gizmos.DrawWireSphere(transform.position, attackRange);
+
+        // LOS debug
+        if (player != null)
+        {
+            Gizmos.color = Color.cyan;
+            Vector3 origin = transform.position + Vector3.up * eyeHeight;
+            Vector3 head = player.position + Vector3.up * eyeHeight;
+            Gizmos.DrawLine(origin, head);
         }
     }
 }
