@@ -3,6 +3,7 @@ using UnityEngine.AI;
 using cowsins;
 using System.Collections;
 using System.Linq;
+using TMPro;
 
 public class Singulra : MonoBehaviour
 {
@@ -36,7 +37,10 @@ public class Singulra : MonoBehaviour
     private const float phase1_Threshold = 1250f;
     private const float phase2a_Threshold = 1000f;
     private const float phase2b_Threshold = 750f;
-
+    [SerializeField] string phase1Text;
+    [SerializeField] string phase2Text;
+    [SerializeField] string phase2bText;
+    [SerializeField] TextMeshProUGUI phaseUIText;
     private bool phase1Triggered, phase2aTriggered, phase2bTriggered;
 
     [Header("Wandering & Phase Waypoints")]
@@ -147,6 +151,8 @@ public class Singulra : MonoBehaviour
 
     private void Start()
     {
+        phaseUIText.enabled = false;
+
         currentState = AIState.Wandering;
 
         enemyHealth.health = maxHealth;
@@ -309,6 +315,11 @@ public class Singulra : MonoBehaviour
     {
         currentState = AIState.Phase1_VulnerableShield;
         currentPhase2 = Phase2Sub.None;
+        if (phase1Triggered)
+        {
+            phaseUIText.enabled = true;
+            if (phaseUIText != null) phaseUIText.text = phase1Text;
+        }
 
         ActivateShieldVisuals();
 
@@ -348,8 +359,31 @@ public class Singulra : MonoBehaviour
         currentState = AIState.Phase2_WaypointShield;
         currentPhase2 = which;
 
+        // --- TAMPILKAN TEKS SESUAI SUB PHASE ---
+        if (phaseUIText != null)
+        {
+            phaseUIText.enabled = true;
+
+            switch (which)
+            {
+                case Phase2Sub.A:
+                    phaseUIText.text = phase2Text;   // teks untuk Phase 2A
+                    break;
+
+                case Phase2Sub.B:
+                    phaseUIText.text = phase2bText;  // teks untuk Phase 2B
+                    break;
+
+                default:
+                    phaseUIText.text = string.Empty;
+                    break;
+            }
+        }
+
+        // Aktifkan shield
         ActivateShieldVisuals();
 
+        // Gerakkan ke waypoint kalau ada
         if (waypoint != null)
         {
             agent.isStopped = false;
@@ -362,6 +396,7 @@ public class Singulra : MonoBehaviour
             SetAnimationState(false, false, true);
         }
     }
+
 
     private void HandlePhase2Shield()
     {
@@ -382,6 +417,17 @@ public class Singulra : MonoBehaviour
     {
         if (currentState == AIState.Phase2_WaypointShield) BreakShield();
     }
+
+    // =============== DARI CANNON PHASE 2B (Metal Wall) ===============
+    public void BreakPhase2BShieldByMetalHit()
+    {
+        // Hanya boleh pecah jika benar-benar sedang Phase 2B
+        if (currentState == AIState.Phase2_WaypointShield && currentPhase2 == Phase2Sub.B)
+        {
+            BreakShield();
+        }
+    }
+    // ================================================================
 
     private void OnCollisionEnter(Collision collision)
     {
@@ -715,6 +761,8 @@ public class Singulra : MonoBehaviour
 
     private void BreakShield()
     {
+        phaseUIText.enabled = false;
+
         enemyHealth.shield = 0;
         if (shieldVFX != null) shieldVFX.SetActive(false);
         PlaySFX(shieldDownSFX);

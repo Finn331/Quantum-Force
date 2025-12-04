@@ -6,7 +6,6 @@ public class Cannon : MonoBehaviour
     [Tooltip("The initial speed of the cannonball as it leaves the barrel.")]
     [SerializeField] float launchVelocity = 30f;
 
-    // --- VARIABEL BARU ---
     [Tooltip("Adds an extra upward push to create a higher arc. 0 = no extra push, 0.5 = significant arc.")]
     [Range(0f, 1f)]
     [SerializeField] float upwardThrust = 0.25f;
@@ -25,6 +24,10 @@ public class Cannon : MonoBehaviour
     [SerializeField] AudioClip fireSFX;
 
     private AudioSource audioSource;
+
+    // TAMBAHAN: reference ke boss Singulra (boleh drag dari scene)
+    [Header("Boss Reference")]
+    [SerializeField] private Singulra singulra;
 
     private void Awake()
     {
@@ -56,7 +59,7 @@ public class Cannon : MonoBehaviour
             audioSource.PlayOneShot(fireSFX);
         }
 
-        // --- NEW LAUNCH LOGIC ---
+        // --- SPAWN CANNONBALL ---
         GameObject cannonBall = Instantiate(cannonBallPrefab, cannonBallSpawnPoint.position, cannonBallSpawnPoint.rotation);
 
         Rigidbody rb = cannonBall.GetComponent<Rigidbody>();
@@ -67,11 +70,21 @@ public class Cannon : MonoBehaviour
             return;
         }
 
-        // --- PERBAIKAN DI SINI ---
         // 1. Gabungkan arah depan dengan sedikit dorongan ke atas
         Vector3 launchDirection = (cannonBallSpawnPoint.forward + (Vector3.up * upwardThrust)).normalized;
 
         // 2. Terapkan kecepatan pada arah yang sudah dikombinasikan
         rb.linearVelocity = launchDirection * launchVelocity;
+
+        // KIRIM REFERENSI BOS KE CANNONBALL
+        var collisionHandler = cannonBall.GetComponent<CannonBallCollision>();
+        if (collisionHandler != null)
+        {
+            collisionHandler.Setup(singulra);
+        }
+        else
+        {
+            Debug.LogWarning("CannonBallCollision component not found on cannonBall prefab!", cannonBall);
+        }
     }
 }

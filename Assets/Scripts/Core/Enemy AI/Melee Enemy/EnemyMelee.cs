@@ -1,5 +1,6 @@
 ﻿using System.Collections;
 using cowsins;
+using TMPro;
 using UnityEngine;
 using UnityEngine.AI;
 
@@ -53,6 +54,8 @@ public class EnemyMelee : MonoBehaviour
     public float rageThreshold = 60f;
     public float rageSpeedBoost = 2f;
     public float rageDamageMultiplier = 1.5f;
+    [SerializeField] string textInfo;
+    [SerializeField] TextMeshProUGUI infoDisplay;
 
     // 🔒 Lindungi fase rage dari interupsi hit
     [Header("Rage Lock")]
@@ -93,6 +96,8 @@ public class EnemyMelee : MonoBehaviour
         enemyHealth.shield = 0;
         currentShield = 0;
         lastShieldValue = 0;
+
+        textInfo = infoDisplay.text;
 
         agent.speed = walkSpeed;
         agent.angularSpeed = 720f;
@@ -178,18 +183,24 @@ public class EnemyMelee : MonoBehaviour
             enemyHealth.shield = 100;
             maxShield = 100;
             shield250 = true;
+            infoDisplay.enabled = true;
+            infoDisplay.text = textInfo; // tampilkan teks saat aktif
         }
         else if (!shield150 && currentHealth <= 150)
         {
             enemyHealth.shield = 100;
             maxShield = 100;
             shield150 = true;
+            infoDisplay.enabled = true;
+            infoDisplay.text = textInfo;
         }
         else if (!shield80 && currentHealth <= 80)
         {
             enemyHealth.shield = 100;
             maxShield = 100;
             shield80 = true;
+            infoDisplay.enabled = true;
+            infoDisplay.text = textInfo;
         }
 
         if (enemyHealth.shield > 0)
@@ -197,12 +208,17 @@ public class EnemyMelee : MonoBehaviour
             bool playerStationary = Vector3.Distance(player.position, lastPlayerPos) < 0.01f;
             bool enemyStationary = Vector3.Distance(transform.position, lastEnemyPos) < 0.01f;
 
+            // Jika shield aktif, tampilkan infoDisplay
+            infoDisplay.enabled = true;
+            infoDisplay.text = textInfo;
+
             // Deteksi apakah shield berkurang karena serangan
             if (enemyHealth.shield < lastShieldValue)
                 shieldDamaged = true;
 
             lastShieldValue = enemyHealth.shield;
 
+            // Regen otomatis hingga penuh
             if (enemyHealth.shield < maxShield)
             {
                 enemyHealth.shield += regenRate * Time.deltaTime;
@@ -213,6 +229,7 @@ public class EnemyMelee : MonoBehaviour
                 }
             }
 
+            // Jika player & musuh diam selama 5 detik, shield hancur
             if (playerStationary && enemyStationary && !shieldDamaged)
             {
                 shieldTimer += Time.deltaTime;
@@ -222,6 +239,7 @@ public class EnemyMelee : MonoBehaviour
                     shieldTimer = 0f;
                     maxShield = 0f;
                     shieldDamaged = false;
+                    infoDisplay.enabled = false; // matikan tampilan saat shield hancur
                 }
 
                 agent.isStopped = true;
@@ -236,7 +254,13 @@ public class EnemyMelee : MonoBehaviour
                 animator.SetBool("isWalking", false);
             }
         }
+        else
+        {
+            // Jika tidak ada shield aktif, sembunyikan infoDisplay
+            infoDisplay.enabled = false;
+        }
     }
+
 
     void HandleChaseOrAttack(float distance)
     {
