@@ -108,7 +108,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: daf2d590ebbc0d344a161bf10dd0c2de, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  uniqueID: bee5e5a7-12e8-4747-9a57-57f961eafab6
+  uniqueID: 36271b99-3371-49c0-a27a-f0b7a995f2e1
   interactable: 0
   interactText: PRESS E TO INTERACT
   instantInteraction: 0
@@ -140,11 +140,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: abece70336e297d4d938544ccf2ce486, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  questions: []
   questionPanel: {fileID: 0}
   panelOpenSFX: {fileID: 0}
   rightOrWrongTextPanel: {fileID: 0}
   rightAnswerText: {fileID: 0}
   wrongAnswerText: {fileID: 0}
+  questionDisplayText: {fileID: 0}
+  answerButtons: []
+  answerButtonTexts: []
   playerMovement: {fileID: 0}
   pauseMenu: {fileID: 0}
   crosshair: {fileID: 0}
