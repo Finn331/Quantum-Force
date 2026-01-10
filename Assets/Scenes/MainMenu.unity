@@ -174,7 +174,10 @@ MonoBehaviour:
   timerString: 00:00
   totalRight: 0
   totalWrong: 0
-  resetOnStart: 1
+  resetOnStart: 0
+  allWeapons:
+  - {fileID: 11400000, guid: 907aa7bd70f532947bfa1d5f3ce12fa9, type: 2}
+  - {fileID: 11400000, guid: 6553d6d464f4c3d489647f8005b06c2e, type: 2}
 --- !u!4 &25151988
 Transform:
   m_ObjectHideFlags: 0
@@ -4640,7 +4643,19 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 319752228}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 420060691}
+        m_TargetAssemblyTypeName: LoadingScreenManager, Assembly-CSharp
+        m_MethodName: OnPlayButtonPressed
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
   buttonType: 1
   gameObjectToEnable: {fileID: 0}
   gameObjectsToDisable: []
@@ -7239,6 +7254,7 @@ GameObject:
   m_Component:
   - component: {fileID: 574741276}
   - component: {fileID: 574741275}
+  - component: {fileID: 574741277}
   m_Layer: 0
   m_Name: Manager
   m_TagString: Untagged
@@ -7273,6 +7289,21 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &574741277
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 574741274}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cc1746c5c9bbbfa45846d34061dbe5c8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MenuManager
+  clickSFX: {fileID: 0}
+  continueButton: {fileID: 319752229}
+  firstLevelSceneName: Gameplay
 --- !u!1 &586805910
 GameObject:
   m_ObjectHideFlags: 0
@@ -10957,6 +10988,18 @@ MonoBehaviour:
       - m_Target: {fileID: 420060691}
         m_TargetAssemblyTypeName: LoadingScreenManager, Assembly-CSharp
         m_MethodName: OnPlayButtonPressed
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
+      - m_Target: {fileID: 574741277}
+        m_TargetAssemblyTypeName: MenuManager, Assembly-CSharp
+        m_MethodName: ResetGameData
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
