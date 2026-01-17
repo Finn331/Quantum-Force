@@ -108,7 +108,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: daf2d590ebbc0d344a161bf10dd0c2de, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  uniqueID: 36271b99-3371-49c0-a27a-f0b7a995f2e1
+  uniqueID: cf7ae1a8-2860-4e9a-b5c9-3376b3f621d6
   interactable: 0
   interactText: PRESS E TO INTERACT
   instantInteraction: 0
@@ -140,6 +140,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: abece70336e297d4d938544ccf2ce486, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  useBuiltInQuestions: 1
+  newtonLawType: 1
   questions: []
   questionPanel: {fileID: 0}
   panelOpenSFX: {fileID: 0}
@@ -152,6 +154,7 @@ MonoBehaviour:
   playerMovement: {fileID: 0}
   pauseMenu: {fileID: 0}
   crosshair: {fileID: 0}
+  levelManager: {fileID: 0}
   onRightAnswer:
     m_PersistentCalls:
       m_Calls: []

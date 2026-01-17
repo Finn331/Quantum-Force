@@ -1,0 +1,21 @@
+4.2.1 Pengujian Black Box
+Pengujian Black Box yaitu menguji perangkat lunak dari segi spesifikasi fungsional tanpa menguji desain dan kode program. Pengujian dimaksudkan untuk mengetahui apakah fungsi masukan dan keluaran dari perangkat sesuai dengan spesifikasi yang dibutuhkan.
+
+| Data masukan | Yang diharapkan | Hasil |
+| :--- | :--- | :--- |
+| Menekan button Continue | Tampil antarmuka permainan terakhir yang disimpan | [ √ ] Diterima |
+| Menekan button New Game | Tampil antarmuka awal permainan (Level 1) dan mereset data lama | [ √ ] Diterima |
+| Menekan button Quit | Keluar dari aplikasi permainan | [ √ ] Diterima |
+| Menekan button Main Menu (di Finish Panel) | Kembali ke Tampilan Menu Utama dan menyimpan progress | [ √ ] Diterima |
+
+Tabel 6. Whitebox Testing
+
+| No | Fitur | Fungsi/Kode yang Diuji | Logika yang Diuji | Hasil |
+| :--- | :--- | :--- | :--- | :--- |
+| 1 | Mulai Permainan Baru | `public void NewGame()` (MenuManager.cs) | Fungsi mereset data save (`HardResetRunData`), mengatur flag reset, dan memuat scene awal. | Valid |
+| 2 | Lanjut Permainan | `public void ContinueGame()` (MenuManager.cs) | Fungsi memeriksa scene yang tersimpan di `SaveManager` dan memuatnya. Fallback ke level awal jika kosong. | Valid |
+| 3 | Cek File Save | `private void CheckSavedGame()` (MenuManager.cs) | Memeriksa eksistensi file `playerInfo.dat` di `persistentDataPath`. Jika ada, tombol Continue diaktifkan. | Valid |
+| 4 | Penyimpanan Data | `public void SaveGame()` (SaveManager.cs) | Membuat `BinaryFormatter`, menyerialisasi data posisi, scene, timer, dan skor ke dalam file biner. | Valid |
+| 5 | Load Data Senjata | `public void LoadWeapons()` (SaveManager.cs) | Membaca file save, mencocokkan nama senjata dengan registry `allWeapons`, dan mengembalikan state ammo. | Valid |
+| 6 | Evaluasi Level | `public void FinishLevel()` (LevelManager.cs) | Menyimpan game, menghentikan input player (`UnlockCursorAndDisablePlayer`), dan memicu animasi UI panel finish. | Valid |
+| 7 | Update Timer | `void Update()` (LevelManager.cs) | Menambahkan `Time.deltaTime` ke `timerSeconds` di `SaveManager` setiap frame selama runtime. | Valid |
