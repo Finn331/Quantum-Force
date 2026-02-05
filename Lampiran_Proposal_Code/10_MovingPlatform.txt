@@ -1,0 +1,194 @@
+using UnityEngine;
+
+using System.Collections.Generic;
+
+
+[RequireComponent(typeof(Rigidbody))]
+
+public class MovingPlatform : MonoBehaviour
+
+{
+
+    [Header("Movement")]
+
+    [Tooltip("Titik tujuan platform. Bisa diisi dengan Empty Object.")]
+
+    public Transform endPoint;
+
+    [Tooltip("Waktu yang dibutuhkan untuk mencapai tujuan (dalam detik).")]
+
+    public float moveDuration = 3.0f;
+
+
+    private Rigidbody rb;
+
+    private Vector3 startPosition;
+
+    private Vector3 targetPosition;
+
+    private float speed;
+
+
+    // Menyimpan Rigidbody pemain yang ada di atas platform
+
+    private List<Rigidbody> passengers = new List<Rigidbody>();
+
+    // Menyimpan parent asli dari pemain
+
+    private Dictionary<Transform, Transform> passengerParentMap = new Dictionary<Transform, Transform>();
+
+
+    private void Awake()
+
+    {
+
+        rb = GetComponent<Rigidbody>();
+
+        rb.isKinematic = true;
+
+    }
+
+
+    void Start()
+
+    {
+
+        startPosition = transform.position;
+
+        targetPosition = startPosition;
+
+
+        if (endPoint != null)
+
+        {
+
+            float distance = Vector3.Distance(startPosition, endPoint.position);
+
+            speed = distance / moveDuration;
+
+        }
+
+        else
+
+        {
+
+            Debug.LogError("End Point belum di-set untuk Moving Platform!", gameObject);
+
+        }
+
+    }
+
+
+    void FixedUpdate()
+
+    {
+
+        if (endPoint == null) return;
+
+
+        Vector3 currentPos = rb.position;
+
+        Vector3 newPosition = Vector3.MoveTowards(currentPos, targetPosition, speed * Time.fixedDeltaTime);
+
+
+        // Hitung seberapa jauh platform akan bergerak di frame ini
+
+        Vector3 moveDelta = newPosition - currentPos;
+
+
+        // Gerakkan platform
+
+        rb.MovePosition(newPosition);
+
+
+        // Gerakkan semua penumpang sejauh pergerakan platform
+
+        if (passengers.Count > 0)
+
+        {
+
+            foreach (Rigidbody passengerRb in passengers)
+
+            {
+
+                passengerRb.MovePosition(passengerRb.position + moveDelta);
+
+            }
+
+        }
+
+    }
+
+
+    private void OnTriggerEnter(Collider other)
+
+    {
+
+        if (other.gameObject.CompareTag("Player"))
+
+        {
+
+            Rigidbody passengerRb = other.GetComponent<Rigidbody>();
+
+            if (passengerRb != null && !passengers.Contains(passengerRb))
+
+            {
+
+                Debug.Log("Player naik ke platform.");
+
+                passengers.Add(passengerRb);
+
+
+                // Simpan parent asli pemain
+
+                passengerParentMap[other.transform] = other.transform.parent;
+
+                // Tetap jadikan child untuk handle rotasi (jika ada)
+
+                other.transform.SetParent(transform);
+
+
+                targetPosition = endPoint.position;
+
+            }
+
+        }
+
+    }
+
+
+    private void OnTriggerExit(Collider other)
+
+    {
+
+        if (other.gameObject.CompareTag("Player"))
+
+        {
+
+            Rigidbody passengerRb = other.GetComponent<Rigidbody>();
+
+            if (passengerRb != null && passengers.Contains(passengerRb))
+
+            {
+
+                Debug.Log("Player turun dari platform.");
+
+                passengers.Remove(passengerRb);
+
+
+                // Kembalikan pemain ke parent aslinya
+
+                other.transform.SetParent(passengerParentMap[other.transform]);
+
+                passengerParentMap.Remove(other.transform);
+
+
+                targetPosition = startPosition;
+
+            }
+
+        }
+
+    }
+
+}

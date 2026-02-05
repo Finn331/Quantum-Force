@@ -1,0 +1,141 @@
+using UnityEngine;
+using UnityEngine.Events;
+
+public class ProtectorDrone : MonoBehaviour
+{
+    [Header("Referensi Inti")]
+    [Tooltip("Objek visual untuk perisai drone.")]
+    public GameObject shieldVFX;
+    [Tooltip("Kamera utama pemain (First Person Camera).")]
+    public Camera playerCamera;
+    [Tooltip("Referensi ke Transform root dari objek Player. Lebih baik diisi manual.")]
+    public Transform player;
+
+    private Collider droneCollider;
+
+    [Header("Perilaku Drone")]
+    [Tooltip("Seberapa cepat drone berputar untuk menatap pemain.")]
+    public float rotationSpeed = 5f;
+
+    [Header("Kondisi Penghancuran Perisai")]
+    [Tooltip("Batas toleransi gerakan pemain. Pemain dianggap diam jika gerakannya di bawah nilai ini.")]
+    public float stillnessThreshold = 0.05f;
+    [Tooltip("Jarak maksimal pemain bisa menghancurkan perisai.")]
+    public float maxBreakDistance = 15f;
+    [Tooltip("Durasi pemain harus diam & menatap untuk menghancurkan perisai.")]
+    public float timeToBreakShield = 5.0f;
+
+    [Tooltip("Layer tempat semua drone berada. Ini membuat raycast lebih efisien.")]
+    public LayerMask droneLayer;
+
+    [Header("Event")]
+    [Tooltip("Aksi yang akan dipicu saat perisai drone ini hancur.")]
+    public UnityEvent onShieldDestroyed;
+
+    private bool shieldIsActive = true;
+    private Vector3 lastCameraPosition; // DIGANTI: Sekarang melacak posisi kamera
+    private float breakShieldTimer = 0f;
+
+    private void Awake()
+    {
+        droneCollider = GetComponent<Collider>();
+    }
+
+    void Start()
+    {
+        if (player == null)
+        {
+            if (playerCamera == null) playerCamera = Camera.main;
+            if (playerCamera != null) player = playerCamera.transform.root;
+        }
+
+        if (player != null && playerCamera != null)
+        {
+            // Simpan posisi awal kamera
+            lastCameraPosition = playerCamera.transform.position;
+        }
+        else
+        {
+            Debug.LogError("Player atau Player Camera tidak ditemukan!", gameObject);
+            this.enabled = false;
+            return;
+        }
+
+        if (shieldVFX != null) shieldVFX.SetActive(true);
+    }
+
+    void Update()
+    {
+        if (!shieldIsActive || player == null) return;
+
+        HandleRotation();
+        CheckShieldBreakConditions();
+
+        // Update posisi terakhir kamera untuk perbandingan di frame berikutnya
+        if (playerCamera != null) lastCameraPosition = playerCamera.transform.position;
+    }
+
+    void HandleRotation()
+    {
+        Vector3 directionToPlayer = player.position - transform.position;
+        directionToPlayer.y = 0;
+
+        if (directionToPlayer != Vector3.zero)
+        {
+            Quaternion targetRotation = Quaternion.LookRotation(directionToPlayer);
+            transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
+        }
+    }
+
+    void CheckShieldBreakConditions()
+    {
+        if (playerCamera == null) return;
+
+        if (Vector3.Distance(transform.position, player.position) > maxBreakDistance)
+        {
+            breakShieldTimer = 0f;
+            return;
+        }
+
+        // --- PERBAIKAN LOGIKA DIAM DI SINI ---
+        // Pengecekan diam sekarang berdasarkan pergerakan kamera, bukan badan player
+        bool playerIsStill = Vector3.Distance(playerCamera.transform.position, lastCameraPosition) < stillnessThreshold;
+
+        bool playerIsLooking = false;
+        Ray ray = playerCamera.ScreenPointToRay(new Vector3(Screen.width / 2, Screen.height / 2));
+
+        if (Physics.Raycast(ray, out RaycastHit hit, maxBreakDistance, droneLayer))
+        {
+            if (hit.collider == droneCollider)
+            {
+                playerIsLooking = true;
+            }
+        }
+
+        if (playerIsStill && playerIsLooking)
+        {
+            breakShieldTimer += Time.deltaTime;
+            if (breakShieldTimer >= timeToBreakShield)
+            {
+                BreakShield();
+            }
+        }
+        else
+        {
+            breakShieldTimer = 0f;
+        }
+    }
+
+    void BreakShield()
+    {
+        Debug.Log("Perisai drone hancur oleh tatapan pemain!");
+        shieldIsActive = false;
+
+        if (shieldVFX != null) shieldVFX.SetActive(false);
+
+        onShieldDestroyed.Invoke();
+
+        this.enabled = false;
+        Debug.Log("Protector Drone dinonaktifkan.");
+    }
+}

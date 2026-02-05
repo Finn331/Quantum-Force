@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 92881e52a5557ad48bff7e44722f0285, type: 3}
+  m_Name: Level 1 Stage 3
+  m_EditorClassIdentifier: Assembly-CSharp::SubtitleData
+  entries:
+  - startTime: 0
+    duration: 24
+    indonesianText: Ketika sebuah benda diberi gaya dari luar, gerakannya akan dipengaruhi
+      oleh permukaan tempat ia bergerak. Jika permukaannya sangat halus, benda akan
+      bergerak dengan kecepatan konstan. Namun, pada permukaan kasar, benda perlahan
+      akan kehilangan kecepatannya. Hal ini menunjukkan bahwa bentuk dan tekstur
+      permukaan berpengaruh langsung terhadap gaya gesek yang bekerja pada benda
+      tersebut
+    englishText: When an object is given an external force, it will move depending
+      on the terrain it is traversing. A completely smooth surface will have the
+      object moving in a constant manner, while a rough surface will have the object
+      slowly losing its velocity over time. This shows that the shape and texture
+      of the surface directly influence the frictional force acting on the object
+      as it moves

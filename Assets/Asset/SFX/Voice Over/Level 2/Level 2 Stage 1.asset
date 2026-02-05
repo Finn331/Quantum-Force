@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 92881e52a5557ad48bff7e44722f0285, type: 3}
+  m_Name: Level 2 Stage 1
+  m_EditorClassIdentifier: Assembly-CSharp::SubtitleData
+  entries:
+  - startTime: 0
+    duration: 25
+    indonesianText: Setiap benda memiliki massa yang unik dan membedakannya dari
+      benda lain. Massa tersebut dapat diketahui melalui faktor-faktor seperti volume
+      dan densitasnya, gaya yang bekerja padanya beserta percepatan yang dihasilkan,
+      serta berat yang dipengaruhi oleh gravitasi. Oleh karena itu, perbedaan massa
+      antar benda secara alami menimbulkan perbedaan besar kecilnya gaya yang dihasilkan
+    englishText: Every existing object possesses a unique mass that distinguishes
+      it from others. These masses can be identified through factors such as their
+      respective volumes and densities, the forces acting on them, and their resulting
+      accelerations, as well as their weights influenced by gravitational acceleration.
+      Consequently, variations in mass among objects inherently give rise to differences
+      in the magnitude of the forces they produce
